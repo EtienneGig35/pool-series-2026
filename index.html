@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pool des séries 2026 — Ligue du Mal</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242836;
+  --border: #2e3345;
+  --text: #e8eaf0;
+  --text2: #9299b0;
+  --accent: #4f8cff;
+  --accent2: #3b6fcc;
+  --gold: #ffd700;
+  --silver: #c0c0c0;
+  --bronze: #cd7f32;
+  --green: #4caf50;
+  --red: #ef5350;
+  --orange: #ff9800;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+a { color: var(--accent); text-decoration: none; }
+
+/* NAV */
+.nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
+.nav-logo { font-weight: 800; font-size: 18px; padding: 16px 12px 16px 0; border-right: 1px solid var(--border); margin-right: 8px; white-space: nowrap; }
+.nav-logo span { color: var(--accent); }
+.nav-tab { padding: 16px 16px; cursor: pointer; color: var(--text2); font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; transition: all .2s; }
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* LAYOUT */
+.page { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+.page.active { display: block; }
+h2 { font-size: 22px; font-weight: 700; margin-bottom: 16px; }
+h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text2); }
+
+/* CARDS */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+
+/* TABLE */
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--text2); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+td { font-size: 14px; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(79,140,255,.05); }
+
+/* BUTTONS */
+.btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-danger { background: var(--red); border-color: var(--red); color: #fff; }
+.btn-danger:hover { opacity: .85; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* INPUTS */
+input, select { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 14px; outline: none; }
+input:focus, select:focus { border-color: var(--accent); }
+input::placeholder { color: var(--text2); }
+
+/* BADGE */
+.badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.badge-gold { background: rgba(255,215,0,.15); color: var(--gold); }
+.badge-silver { background: rgba(192,192,192,.15); color: var(--silver); }
+.badge-bronze { background: rgba(205,127,50,.15); color: var(--bronze); }
+.badge-green { background: rgba(76,175,80,.15); color: var(--green); }
+.badge-red { background: rgba(239,83,80,.15); color: var(--red); }
+.badge-blue { background: rgba(79,140,255,.15); color: var(--accent); }
+
+/* STANDING ROW */
+.rank-1 td:first-child { color: var(--gold); font-weight: 700; }
+.rank-2 td:first-child { color: var(--silver); font-weight: 700; }
+.rank-3 td:first-child { color: var(--bronze); font-weight: 700; }
+.pts-big { font-size: 20px; font-weight: 800; color: var(--accent); }
+
+/* DRAFT */
+.draft-grid { display: grid; gap: 2px; font-size: 12px; overflow-x: auto; }
+.draft-cell { padding: 8px 6px; background: var(--surface2); text-align: center; border-radius: 4px; min-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.draft-cell.header { background: var(--accent); color: #fff; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.draft-cell.round-label { background: var(--border); font-weight: 600; color: var(--text2); display: flex; align-items: center; justify-content: center; }
+.draft-cell.current { border: 2px solid var(--gold); animation: pulse 1.5s infinite; }
+.draft-cell.goalie { background: rgba(79,140,255,.1); }
+.draft-cell.team-pick { background: rgba(255,152,0,.1); }
+@keyframes pulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(255,215,0,.3); } 50%{ box-shadow: 0 0 0 6px rgba(255,215,0,0); } }
+
+/* SEARCH */
+.search-container { position: relative; }
+.search-results { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-height: 300px; overflow-y: auto; z-index: 50; display: none; }
+.search-results.show { display: block; }
+.search-item { padding: 10px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.search-item:hover { background: var(--surface2); }
+.search-item .team { color: var(--text2); font-size: 12px; }
+.search-item.taken { opacity: .35; pointer-events: none; }
+
+/* PREDICTIONS */
+.pred-round { margin-bottom: 20px; }
+.pred-series { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.pred-series:last-child { border-bottom: none; }
+.pred-series label { min-width: 220px; font-size: 14px; }
+
+/* TABS */
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.tab-btn { padding: 8px 16px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); cursor: pointer; font-size: 13px; }
+.tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* STATUS */
+.status-bar { display: flex; gap: 16px; align-items: center; padding: 12px 16px; background: var(--surface2); border-radius: 8px; margin-bottom: 16px; font-size: 13px; flex-wrap: wrap; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-dot.online { background: var(--green); }
+.status-dot.offline { background: var(--red); }
+
+/* MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.show { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 90%; max-width: 500px; }
+.modal h3 { color: var(--text); margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+/* POOLER DETAIL */
+.pooler-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--surface2); border-radius: 10px; padding: 14px; text-align: center; }
+.stat-card .val { font-size: 28px; font-weight: 800; color: var(--accent); }
+.stat-card .lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; margin-top: 4px; }
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .nav { flex-wrap: wrap; }
+  .nav-tab { padding: 12px 10px; font-size: 12px; }
+  .page { padding: 16px; }
+  .pred-series { flex-direction: column; align-items: flex-start; }
+}
+
+/* DEADLINE */
+.deadline-open { background: rgba(76,175,80,.15); color: var(--green); }
+.deadline-closed { background: rgba(239,83,80,.15); color: var(--red); }
+.deadline-tbd { background: rgba(255,152,0,.15); color: var(--orange); }
+.locked-overlay { position: relative; }
+.locked-overlay::after { content: ''; position: absolute; inset: 0; background: rgba(15,17,23,.7); border-radius: 12px; pointer-events: all; }
+.pred-locked-msg { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 14px; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; background: var(--green); color: #fff; border-radius: 10px; font-size: 14px; z-index: 300; opacity: 0; transform: translateY(20px); transition: all .3s; }
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* PLAYER HEADSHOTS & TEAM LOGOS */
+.player-cell { display: flex; align-items: center; gap: 10px; }
+.player-headshot { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--surface2); flex-shrink: 0; border: 1px solid var(--border); }
+.team-cell { display: flex; align-items: center; gap: 6px; }
+.team-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.team-logo-lg { width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; }
+</style>
+<!-- Local data file (generated by update-nhl-data.py) -->
+<script src="nhl-data.js" onerror="console.log('nhl-data.js not found (normal on GitHub Pages)')"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo">🏒 Pool <span>Séries 2026</span></div>
+  <div class="nav-tab active" data-page="standings">Classement</div>
+  <div class="nav-tab" data-page="draft">Draft</div>
+  <div class="nav-tab" data-page="predictions">Prédictions</div>
+  <div class="nav-tab" data-page="poolers">Détails Poolers</div>
+  <div class="nav-tab" data-page="config">Config</div>
+  <div class="nav-right">
+    <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
+  </div>
+</nav>
+
+<!-- ======================== CLASSEMENT ======================== -->
+<div class="page active" id="page-standings">
+  <h2>Classement</h2>
+  <div class="status-bar" id="data-status">
+    <span><span class="status-dot offline" id="status-dot"></span> Données NHL: non chargées</span>
+    <span id="last-update"></span>
+  </div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>Pooler</th>
+          <th style="text-align:right">Joueurs</th>
+          <th style="text-align:right">Gardien</th>
+          <th style="text-align:right">Équipe</th>
+          <th style="text-align:right">Prédictions</th>
+          <th style="text-align:right">Bonus Finale</th>
+          <th style="text-align:right;font-weight:800">Total</th>
+        </tr>
+      </thead>
+      <tbody id="standings-body"></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Règlements</h3>
+    <div style="font-size:13px;color:var(--text2);line-height:1.8">
+      <strong>Points joueurs:</strong> 1 pt par point marqué (but ou aide) en séries.<br>
+      <strong>Gardien:</strong> 2 pts par victoire + 2 pts supplémentaires par blanchissage.<br>
+      <strong>Équipe:</strong> 2 pts par victoire de l'équipe en séries.<br>
+      <strong>Prédictions rondes:</strong> 3 pts si bonne équipe + bon nombre de matchs, 1 pt si bonne équipe seulement.<br>
+      <strong>Bonus finale:</strong> 10 pts champion Coupe Stanley, 5 pts finaliste, 5 pts Conn Smythe.<br>
+      <strong>Distribution:</strong> #1 points: 30$, #1 prédictions: 30$, #1 total: 140$
+    </div>
+  </div>
+</div>
+
+<!-- ======================== DRAFT ======================== -->
+<div class="page" id="page-draft">
+  <h2>Draft Board</h2>
+  <div class="status-bar">
+    <span id="draft-status">Draft non commencé</span>
+    <span id="draft-round-info"></span>
+  </div>
+
+  <div class="card" id="draft-controls" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <button class="btn btn-primary" id="btn-start-draft" onclick="startDraft()">Commencer le Draft</button>
+    <button class="btn" id="btn-undo-pick" onclick="undoLastPick()" style="display:none">↩ Annuler dernier choix</button>
+    <button class="btn btn-danger" id="btn-reset-draft" onclick="resetDraft()" style="display:none">Réinitialiser le Draft</button>
+    <div class="search-container" id="draft-search-wrap" style="display:none;flex:1;min-width:250px">
+      <input type="text" id="draft-search" placeholder="Chercher un joueur, gardien ou équipe..." style="width:100%" oninput="onDraftSearch(this.value)" onfocus="onDraftSearch(this.value)">
+      <div class="search-results" id="draft-results"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label style="font-size:12px;color:var(--text2)">Type:</label>
+      <select id="pick-type" style="font-size:12px">
+        <option value="player">Joueur</option>
+        <option value="goalie">Gardien</option>
+        <option value="team">Équipe</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card" style="overflow-x:auto">
+    <div id="draft-board"></div>
+  </div>
+</div>
+
+<!-- ======================== PRÉDICTIONS ======================== -->
+<div class="page" id="page-predictions">
+  <h2>Prédictions</h2>
+
+  <!-- Login gate -->
+  <div id="pred-login" class="card">
+    <h3>Connexion</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Sélectionnez votre nom et entrez votre mot de passe pour accéder à vos prédictions.</p>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div>
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Pooler</label>
+        <select id="pred-pooler" style="min-width:150px"></select>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Mot de passe</label>
+        <input type="password" id="pred-password" placeholder="Mot de passe" style="width:160px" onkeydown="if(event.key==='Enter')loginPredictions()">
+      </div>
+      <button class="btn btn-primary" onclick="loginPredictions()">Accéder</button>
+    </div>
+    <p id="pred-login-error" style="color:var(--red);font-size:13px;margin-top:8px;display:none"></p>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+      <p style="font-size:12px;color:var(--text2)">Première visite? Créez votre mot de passe:</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <input type="password" id="pred-new-password" placeholder="Nouveau mot de passe" style="width:160px">
+        <button class="btn btn-sm" onclick="createPassword()">Créer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Predictions content (hidden until login) -->
+  <div id="pred-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+      <span style="font-size:16px">Prédictions de <strong id="pred-logged-name"></strong></span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="savePredictions()">💾 Sauvegarder</button>
+        <button class="btn btn-sm" onclick="logoutPredictions()">Déconnexion</button>
+      </div>
+    </div>
+
+    <!-- Finale predictions -->
+    <div class="card" id="pred-finale-card">
+      <div class="card-header">
+        <h3 style="margin:0">Prédictions de la Finale de la Coupe Stanley</h3>
+        <span class="badge" id="pred-finale-deadline"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+        <div>
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Champion Coupe Stanley (10 pts)</label>
+          <input type="text" id="pred-champion" placeholder="Nom de l'équipe" style="width:100%">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Finaliste (5 pts)</label>
+          <input type="text" id="pred-finalist" placeholder="Nom de l'équipe" style="width:100%">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Conn Smythe (5 pts)</label>
+          <input type="text" id="pred-connsmythe" placeholder="Nom du joueur" style="width:100%">
+        </div>
+      </div>
+    </div>
+
+    <!-- Round predictions -->
+    <div id="pred-rounds"></div>
+  </div>
+</div>
+
+<!-- ======================== DÉTAILS POOLERS ======================== -->
+<div class="page" id="page-poolers">
+  <h2>Détails par Pooler</h2>
+  <div class="tabs" id="pooler-tabs"></div>
+  <div id="pooler-detail"></div>
+</div>
+
+<!-- ======================== CONFIG ======================== -->
+<div class="page" id="page-config">
+  <h2>Configuration <span class="badge badge-blue">Admin</span></h2>
+
+  <!-- Admin login gate -->
+  <div id="config-login" class="card">
+    <h3>Accès administrateur</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Cette section est réservée à l'administrateur du pool.</p>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div>
+        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Mot de passe admin</label>
+        <input type="password" id="config-admin-pw" placeholder="Mot de passe" style="width:200px" onkeydown="if(event.key==='Enter')loginAdmin()">
+      </div>
+      <button class="btn btn-primary" onclick="loginAdmin()">Accéder</button>
+    </div>
+    <p id="config-login-error" style="color:var(--red);font-size:13px;margin-top:8px;display:none"></p>
+  </div>
+
+  <!-- Admin content (hidden until login) -->
+  <div id="config-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:14px;color:var(--text2)">Connecté en tant qu'admin (<strong id="config-admin-name"></strong>)</span>
+      <button class="btn btn-sm" onclick="logoutAdmin()">Déconnexion</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 style="margin:0">Poolers</h3>
+        <button class="btn btn-primary btn-sm" onclick="addPooler()">+ Ajouter</button>
+      </div>
+      <table>
+        <thead><tr><th>Nom</th><th>Payé</th><th>Mot de passe</th><th style="width:80px"></th></tr></thead>
+        <tbody id="config-poolers"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Modifier les prédictions d'un pooler</h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px">En tant qu'admin, vous pouvez éditer les prédictions de n'importe quel pooler, même après l'échéance.</p>
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Pooler</label>
+          <select id="admin-edit-pooler" style="min-width:150px"></select>
+        </div>
+        <button class="btn btn-primary" onclick="adminEditPredictions()">Éditer ses prédictions</button>
+      </div>
+    </div>
+
+  <div class="card">
+    <h3>Conn Smythe (MVP des séries)</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Le champion et le finaliste sont détectés automatiquement. Seul le Conn Smythe doit être entré manuellement.</p>
+    <div style="max-width:300px">
+      <input type="text" id="res-connsmythe" placeholder="Nom du joueur MVP" style="width:100%" onchange="saveFinaleResults()">
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Échéances des prédictions</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Les prédictions doivent être soumises avant ces dates. Les prédictions d'un pooler deviennent visibles dans Détails Poolers après l'échéance.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px" id="config-deadlines"></div>
+  </div>
+
+  <div class="card">
+    <h3>Séries & données NHL</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:8px">Les matchups, résultats et statistiques se chargent automatiquement au démarrage depuis l'API de la NHL.</p>
+    <div id="config-bracket-status"></div>
+  </div>
+
+  <div class="card">
+    <h3>Sauvegarde</h3>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <button class="btn" onclick="exportData()">📥 Exporter backup JSON</button>
+      <button class="btn" onclick="document.getElementById('import-file').click()">📤 Restaurer backup</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+  </div>
+
+  </div><!-- /config-content -->
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// DATA MODEL
+// ============================================================
+const DEFAULT_DATA = {
+  poolers: [
+    { name: 'Maxime', paid: false },
+    { name: 'François', paid: false },
+    { name: 'Étienne M', paid: true },
+    { name: 'Étienne G', paid: true },
+    { name: 'Francis', paid: true },
+    { name: 'Antoine', paid: false },
+    { name: 'Mathieu', paid: true },
+    { name: 'Félix', paid: true },
+  ],
+  rounds: {
+    1: [], 2: [], 3: [], 4: []
+  },
+  results: {
+    1: [], 2: [], 3: [], 4: []
+  },
+  finaleResults: { champion: '', finalist: '', connSmythe: '' },
+  draft: {
+    started: false,
+    completed: false,
+    picks: [],
+    currentRound: 1,
+    currentPick: 0,
+    totalRounds: 10
+  },
+  predictions: {},
+  passwords: {},     // { poolerName: 'password' }
+  adminPooler: 'Étienne G',
+  deadlines: {
+    finale: '2026-04-19T23:59:00-04:00',  // Prédictions finale: 19 avril 23h59 ET
+    1: '2026-04-19T23:59:00-04:00',        // Ronde 1: veille du début des séries
+    2: '',                                   // À déterminer
+    3: '',                                   // À déterminer
+    4: ''                                    // À déterminer
+  },
+  nhlData: {
+    skaters: [],
+    goalies: [],
+    teams: [],
+    lastUpdate: null
+  }
+};
+
+let DATA = loadData();
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem('pool2026');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...DEFAULT_DATA, ...parsed, draft: { ...DEFAULT_DATA.draft, ...(parsed.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(parsed.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(parsed.deadlines||{}) }, passwords: { ...(parsed.passwords||{}) } };
+    }
+  } catch(e) {}
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+
+function saveData() {
+  localStorage.setItem('pool2026', JSON.stringify(DATA));
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('page-' + tab.dataset.page).classList.add('active');
+    if (tab.dataset.page === 'standings') renderStandings();
+    if (tab.dataset.page === 'draft') renderDraft();
+    if (tab.dataset.page === 'predictions') renderPredictions();
+    if (tab.dataset.page === 'poolers') renderPoolerDetail();
+    if (tab.dataset.page === 'config') renderConfig();
+  });
+});
+
+// ============================================================
+// NHL API
+// ============================================================
+const NHL_SEASON = '20252026';
+const NHL_API = 'https://api-web.nhle.com/v1';
+
+// Helper: extract name from NHL API objects
+function nhlName(obj) {
+  if (!obj) return '';
+  if (typeof obj === 'string') return obj;
+  return obj.default || obj.fr || Object.values(obj)[0] || '';
+}
+
+// ---- Strategy 1: Load pre-fetched data ----
+// Supports both: nhl-data.js (local, via <script> tag → window.NHL_PREFETCH)
+//            and: nhl-data.json (GitHub Pages, via fetch)
+async function loadPrefetchedData() {
+  // Check local .js file first (loaded via <script src="nhl-data.js">)
+  if (window.NHL_PREFETCH && window.NHL_PREFETCH.skaters?.length) {
+    console.log(`✅ Données locales (nhl-data.js): ${window.NHL_PREFETCH.skaters.length} joueurs, ${window.NHL_PREFETCH.goalies?.length} gardiens`);
+    return window.NHL_PREFETCH;
+  }
+  // Try fetching nhl-data.json (GitHub Pages)
+  try {
+    const res = await fetch('nhl-data.json?_=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.skaters?.length) {
+      console.log(`✅ Données GitHub (nhl-data.json): ${data.skaters.length} joueurs, ${data.goalies?.length} gardiens (MAJ: ${data.lastUpdate})`);
+      return data;
+    }
+  } catch(e) {
+    console.log('ℹ️ nhl-data.json non disponible:', e.message);
+  }
+  return null;
+}
+
+// ---- Strategy 2: Live API fetch (works when served from same origin / CORS OK) ----
+async function fetchClubStats(abbrev, gameType) {
+  try {
+    const url = `${NHL_API}/club-stats/${abbrev}/${NHL_SEASON}/${gameType}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function fetchLiveNHLData() {
+  console.log('🏒 Tentative fetch live NHL API...');
+  const standRes = await fetch(`${NHL_API}/standings/now`);
+  if (!standRes.ok) throw new Error(`Standings HTTP ${standRes.status}`);
+  const standJson = await standRes.json();
+  const allTeams = (standJson.standings || []).map(t => ({
+    abbrev: nhlName(t.teamAbbrev) || t.teamAbbrev,
+    name: `${nhlName(t.placeName)} ${nhlName(t.teamCommonName)}`.trim(),
+    wins: t.wins, losses: t.losses, gp: t.gamesPlayed, pts: t.points
+  })).sort((a, b) => b.pts - a.pts);
+
+  const playoffTeams = allTeams.slice(0, 16);
+  console.log(`✅ ${allTeams.length} équipes, top 16: ${playoffTeams.map(t=>t.abbrev).join(',')}`);
+
+  const clubResults = await Promise.all(
+    playoffTeams.map(async (team) => {
+      let stats = await fetchClubStats(team.abbrev, 3);
+      let isPlayoff = true;
+      if (!stats || (!stats.skaters?.length && !stats.goalies?.length)) {
+        stats = await fetchClubStats(team.abbrev, 2);
+        isPlayoff = false;
+      }
+      return { team, stats, isPlayoff };
+    })
+  );
+
+  const skaters = [], goalies = [];
+  for (const { team, stats, isPlayoff } of clubResults) {
+    if (!stats) continue;
+    for (const p of (stats.skaters || [])) {
+      skaters.push({
+        name: `${nhlName(p.firstName)} ${nhlName(p.lastName)}`.trim(),
+        team: team.abbrev, pos: p.positionCode || 'C',
+        gp: p.gamesPlayed || 0, goals: p.goals || 0,
+        assists: p.assists || 0, points: p.points || 0,
+        headshot: p.headshot || '',
+        regSeason: !isPlayoff
+      });
+    }
+    for (const g of (stats.goalies || [])) {
+      goalies.push({
+        name: `${nhlName(g.firstName)} ${nhlName(g.lastName)}`.trim(),
+        team: team.abbrev, gp: g.gamesPlayed || 0,
+        wins: g.wins || 0, losses: g.losses || 0, shutouts: g.shutouts || 0,
+        savePct: g.savePercentage || 0, gaa: g.goalsAgainstAverage || 0,
+        headshot: g.headshot || '',
+        regSeason: !isPlayoff
+      });
+    }
+  }
+
+  skaters.sort((a, b) => b.points - a.points);
+  goalies.sort((a, b) => b.wins - a.wins);
+  const teams = playoffTeams.map(t => ({ name: t.name, abbrev: t.abbrev, gp: t.gp, wins: t.wins, losses: t.losses }));
+  console.log(`✅ Live: ${skaters.length} joueurs, ${goalies.length} gardiens, ${teams.length} équipes`);
+  return { skaters, goalies, teams };
+}
+
+// ---- Combined: try prefetch first, then live API ----
+async function fetchAllNHLData() {
+  // 1. Try pre-fetched data (nhl-data.json from GitHub Actions)
+  const prefetched = await loadPrefetchedData();
+  if (prefetched && prefetched.skaters?.length) return prefetched;
+
+  // 2. Try live API (works when CORS is allowed)
+  try {
+    return await fetchLiveNHLData();
+  } catch(e) {
+    console.warn('❌ Live API failed (CORS?):', e.message);
+  }
+
+  // 3. Nothing worked
+  console.error('❌ Aucune source de données NHL disponible');
+  return { skaters: [], goalies: [], teams: [] };
+}
+
+const NHL_BRACKET_YEAR = '2026';
+
+async function fetchNHLBracket() {
+  // Try from prefetched data first
+  try {
+    const res = await fetch('nhl-data.json?_=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      if (data.bracket) { console.log('✅ Bracket from prefetch'); return data.bracket; }
+    }
+  } catch {}
+  // Try live API
+  try {
+    const url = `${NHL_API}/playoff-bracket/${NHL_BRACKET_YEAR}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch(e) { console.warn('NHL bracket fetch failed:', e); return null; }
+}
+
+function parseBracketToRoundsAndResults(bracket) {
+  if (!bracket) return null;
+  const rounds = { 1: [], 2: [], 3: [], 4: [] };
+  const results = { 1: [], 2: [], 3: [], 4: [] };
+
+  // The bracket API returns an array of series objects or a rounds structure
+  // Handle both common formats
+  const seriesList = bracket.series || bracket.rounds?.flatMap(r => r.matchups || r.series || []) || [];
+
+  // Also try flat structure: bracket itself may be an array
+  const allSeries = Array.isArray(bracket) ? bracket : seriesList;
+
+  if (!allSeries.length && bracket.rounds) {
+    // Format: { rounds: [ { roundNumber, series: [...] } ] }
+    for (const round of bracket.rounds) {
+      const rn = round.roundNumber || round.round;
+      if (rn < 1 || rn > 4) continue;
+      const matchups = round.series || round.matchups || [];
+      for (const m of matchups) {
+        const topSeed = m.topSeedTeam || m.teams?.[0] || {};
+        const bottomSeed = m.bottomSeedTeam || m.teams?.[1] || {};
+        const topName = topSeed.name?.default || topSeed.placeName?.default || topSeed.teamName || topSeed.name || '';
+        const bottomName = bottomSeed.name?.default || bottomSeed.placeName?.default || bottomSeed.teamName || bottomSeed.name || '';
+        if (topName && bottomName) {
+          rounds[rn].push(`${topName} vs ${bottomName}`);
+          const topWins = topSeed.wins ?? m.topSeedWins ?? 0;
+          const bottomWins = bottomSeed.wins ?? m.bottomSeedWins ?? 0;
+          const totalGames = topWins + bottomWins;
+          let winner = '', games = '';
+          if (topWins === 4) { winner = topName; games = totalGames; }
+          else if (bottomWins === 4) { winner = bottomName; games = totalGames; }
+          results[rn].push({ winner, games: games ? String(games) : '' });
+        }
+      }
+    }
+  } else {
+    // Flat format: array of series with roundNumber
+    for (const s of allSeries) {
+      const rn = s.roundNumber || s.playoffRound || s.round;
+      if (!rn || rn < 1 || rn > 4) continue;
+      const topSeed = s.topSeedTeam || s.teams?.[0] || {};
+      const bottomSeed = s.bottomSeedTeam || s.teams?.[1] || {};
+      const topName = topSeed.name?.default || topSeed.placeName?.default || topSeed.teamName || topSeed.name || '';
+      const bottomName = bottomSeed.name?.default || bottomSeed.placeName?.default || bottomSeed.teamName || bottomSeed.name || '';
+      if (topName && bottomName) {
+        rounds[rn].push(`${topName} vs ${bottomName}`);
+        const topWins = topSeed.wins ?? s.topSeedWins ?? 0;
+        const bottomWins = bottomSeed.wins ?? s.bottomSeedWins ?? 0;
+        const totalGames = topWins + bottomWins;
+        let winner = '', games = '';
+        if (topWins === 4) { winner = topName; games = totalGames; }
+        else if (bottomWins === 4) { winner = bottomName; games = totalGames; }
+        results[rn].push({ winner, games: games ? String(games) : '' });
+      }
+    }
+  }
+
+  return { rounds, results };
+}
+
+function autoDetectFinaleResults() {
+  // Champion = winner of round 4, Finalist = loser of round 4
+  const finaleSeries = DATA.rounds[4] || [];
+  const finaleResults = DATA.results[4] || [];
+  if (finaleSeries.length && finaleResults.length && finaleResults[0]?.winner) {
+    const teams = finaleSeries[0].split(/\s+vs\s+/i).map(t => t.trim());
+    const winner = finaleResults[0].winner;
+    const loser = teams.find(t => norm(t) !== norm(winner)) || '';
+    DATA.finaleResults.champion = winner;
+    DATA.finaleResults.finalist = loser;
+  }
+}
+
+async function refreshAll() {
+  toast('Chargement des données NHL...');
+
+  // Fetch all NHL data (prefetch + live fallback)
+  const nhlData = await fetchAllNHLData();
+  const bracket = nhlData?.bracket || await fetchNHLBracket();
+
+  // Update player/goalie/team stats
+  if (nhlData && (nhlData.skaters.length || nhlData.goalies.length || nhlData.teams.length)) {
+    DATA.nhlData = { skaters: nhlData.skaters, goalies: nhlData.goalies, teams: nhlData.teams, lastUpdate: new Date().toISOString() };
+  }
+
+  // Update bracket (matchups + results)
+  if (bracket) {
+    const parsed = parseBracketToRoundsAndResults(bracket);
+    if (parsed) {
+      for (const rn of [1,2,3,4]) {
+        if (parsed.rounds[rn].length) {
+          DATA.rounds[rn] = parsed.rounds[rn];
+          DATA.results[rn] = parsed.results[rn];
+        }
+      }
+    }
+  }
+
+  // Auto-detect champion & finalist from round 4 result
+  autoDetectFinaleResults();
+
+  saveData();
+  updateDataStatus();
+  renderStandings();
+
+  const nSkaters = DATA.nhlData.skaters.length;
+  const totalSeries = Object.values(DATA.rounds).reduce((a, r) => a + r.length, 0);
+  const completedSeries = Object.values(DATA.results).reduce((a, r) => a + r.filter(x => x.winner).length, 0);
+
+  if (nSkaters || totalSeries) {
+    toast(`✅ ${nSkaters} joueurs, ${totalSeries} séries (${completedSeries} terminées)`);
+  } else {
+    toast('⚠️ Aucune donnée (les séries n\'ont peut-être pas commencé)');
+  }
+}
+
+function updateDataStatus() {
+  const dot = document.getElementById('status-dot');
+  const statusEl = document.getElementById('data-status');
+  const updateEl = document.getElementById('last-update');
+  if (DATA.nhlData.lastUpdate) {
+    dot.classList.remove('offline');
+    dot.classList.add('online');
+    statusEl.querySelector('span').innerHTML = `<span class="status-dot online"></span> Données NHL: chargées (${DATA.nhlData.skaters.length} joueurs)`;
+    updateEl.textContent = 'Dernière MAJ: ' + new Date(DATA.nhlData.lastUpdate).toLocaleString('fr-CA');
+  }
+}
+
+// ============================================================
+// SCORING
+// ============================================================
+function getPoolerPicks(poolerName) {
+  const idx = DATA.poolers.findIndex(p => p.name === poolerName);
+  if (idx < 0) return { players: [], goalie: null, team: null };
+  const picks = DATA.draft.picks.filter(p => p.poolerIdx === idx);
+  return {
+    players: picks.filter(p => p.type === 'player').map(p => p.value),
+    goalie: picks.find(p => p.type === 'goalie')?.value || null,
+    team: picks.find(p => p.type === 'team')?.value || null
+  };
+}
+
+function calcPlayerPoints(poolerName) {
+  const { players } = getPoolerPicks(poolerName);
+  if (!DATA.nhlData.skaters.length) return 0;
+  let total = 0;
+  for (const name of players) {
+    const found = DATA.nhlData.skaters.find(s => norm(s.name) === norm(name));
+    if (found) total += found.points;
+  }
+  return total;
+}
+
+function calcGoaliePoints(poolerName) {
+  const { goalie } = getPoolerPicks(poolerName);
+  if (!goalie || !DATA.nhlData.goalies.length) return 0;
+  const found = DATA.nhlData.goalies.find(g => norm(g.name) === norm(goalie));
+  if (!found) return 0;
+  return 2 * (found.wins + found.shutouts);
+}
+
+function calcTeamPoints(poolerName) {
+  const { team } = getPoolerPicks(poolerName);
+  if (!team || !DATA.nhlData.teams.length) return 0;
+  const found = DATA.nhlData.teams.find(t => norm(t.name) === norm(team));
+  if (!found) return 0;
+  return 2 * found.wins;
+}
+
+function calcPredictionPoints(poolerName) {
+  const preds = DATA.predictions[poolerName];
+  if (!preds || !preds.rounds) return 0;
+  let total = 0;
+  for (const roundNum of [1,2,3,4]) {
+    const roundPreds = preds.rounds[roundNum] || [];
+    const roundResults = DATA.results[roundNum] || [];
+    for (let i = 0; i < roundPreds.length; i++) {
+      const pred = roundPreds[i];
+      const result = roundResults[i];
+      if (!pred || !result || !result.winner) continue;
+      if (norm(pred.winner) === norm(result.winner)) {
+        total += (pred.games == result.games) ? 3 : 1;
+      }
+    }
+  }
+  return total;
+}
+
+function calcFinaleBonus(poolerName) {
+  const preds = DATA.predictions[poolerName];
+  if (!preds) return 0;
+  const res = DATA.finaleResults;
+  let total = 0;
+  if (res.champion && norm(preds.champion) === norm(res.champion)) total += 10;
+  if (res.finalist && norm(preds.finalist) === norm(res.finalist)) total += 5;
+  if (res.connSmythe && norm(preds.connSmythe) === norm(res.connSmythe)) total += 5;
+  return total;
+}
+
+function norm(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+
+function getEliminatedTeams() {
+  // An eliminated team is the loser of a series (i.e. not the winner)
+  const eliminated = new Set();
+  for (const rn of [1,2,3,4]) {
+    const series = DATA.rounds[rn] || [];
+    const results = DATA.results[rn] || [];
+    for (let i = 0; i < series.length; i++) {
+      const res = results[i];
+      if (!res?.winner) continue;
+      const teams = series[i].split(/\s+vs\s+/i).map(t => t.trim());
+      for (const t of teams) {
+        if (norm(t) !== norm(res.winner)) eliminated.add(norm(t));
+      }
+    }
+  }
+  return eliminated;
+}
+
+function isPlayerEliminated(playerName, eliminatedTeams) {
+  // Check via NHL data: find the player's team abbreviation or name, then check if eliminated
+  const skater = DATA.nhlData.skaters.find(s => norm(s.name) === norm(playerName));
+  if (skater?.team) {
+    // Check if any eliminated team name/abbrev matches
+    for (const elim of eliminatedTeams) {
+      if (norm(skater.team).includes(elim) || elim.includes(norm(skater.team))) return true;
+    }
+  }
+  const goalie = DATA.nhlData.goalies.find(g => norm(g.name) === norm(playerName));
+  if (goalie?.team) {
+    for (const elim of eliminatedTeams) {
+      if (norm(goalie.team).includes(elim) || elim.includes(norm(goalie.team))) return true;
+    }
+  }
+  // Also check the team picks in DATA.nhlData.teams
+  const team = DATA.nhlData.teams.find(t => norm(t.name) === norm(playerName));
+  if (team) {
+    for (const elim of eliminatedTeams) {
+      if (norm(team.name).includes(elim) || elim.includes(norm(team.name)) ||
+          norm(team.abbrev||'').includes(elim) || elim.includes(norm(team.abbrev||''))) return true;
+    }
+  }
+  return false;
+}
+
+function isTeamEliminated(teamName, eliminatedTeams) {
+  for (const elim of eliminatedTeams) {
+    if (norm(teamName).includes(elim) || elim.includes(norm(teamName))) return true;
+  }
+  return false;
+}
+
+// ============================================================
+// STANDINGS
+// ============================================================
+function renderStandings() {
+  updateDataStatus();
+  const rows = DATA.poolers.map(p => {
+    const playerPts = calcPlayerPoints(p.name);
+    const goaliePts = calcGoaliePoints(p.name);
+    const teamPts = calcTeamPoints(p.name);
+    const predPts = calcPredictionPoints(p.name);
+    const bonusPts = calcFinaleBonus(p.name);
+    const total = playerPts + goaliePts + teamPts + predPts + bonusPts;
+    return { name: p.name, playerPts, goaliePts, teamPts, predPts, bonusPts, total };
+  });
+  rows.sort((a, b) => b.total - a.total);
+
+  const tbody = document.getElementById('standings-body');
+  tbody.innerHTML = rows.map((r, i) => {
+    const rankClass = i < 3 ? `rank-${i+1}` : '';
+    const badge = i === 0 ? '<span class="badge badge-gold">1er</span>' :
+                  i === 1 ? '<span class="badge badge-silver">2e</span>' :
+                  i === 2 ? '<span class="badge badge-bronze">3e</span>' : `${i+1}`;
+    return `<tr class="${rankClass}">
+      <td>${badge}</td>
+      <td><strong>${r.name}</strong></td>
+      <td style="text-align:right">${r.playerPts}</td>
+      <td style="text-align:right">${r.goaliePts}</td>
+      <td style="text-align:right">${r.teamPts}</td>
+      <td style="text-align:right">${r.predPts}</td>
+      <td style="text-align:right">${r.bonusPts}</td>
+      <td style="text-align:right" class="pts-big">${r.total}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// DRAFT
+// ============================================================
+function getDraftOrder(round, numPoolers) {
+  // Snake draft: odd rounds = normal, even rounds = reverse
+  const order = Array.from({length: numPoolers}, (_, i) => i);
+  return (round % 2 === 0) ? order.reverse() : order;
+}
+
+function startDraft() {
+  if (DATA.poolers.length < 2) return toast('Ajoutez au moins 2 poolers');
+  DATA.draft.started = true;
+  DATA.draft.currentRound = 1;
+  DATA.draft.currentPick = 0;
+  DATA.draft.picks = [];
+  DATA.draft.completed = false;
+  saveData();
+  renderDraft();
+  toast('🏒 Le draft est commencé!');
+}
+
+function resetDraft() {
+  if (!confirm('Êtes-vous sûr de vouloir réinitialiser le draft?')) return;
+  DATA.draft = { started: false, completed: false, picks: [], currentRound: 1, currentPick: 0, totalRounds: 10 };
+  saveData();
+  renderDraft();
+  toast('Draft réinitialisé');
+}
+
+function undoLastPick() {
+  if (!DATA.draft.picks.length) return;
+  DATA.draft.picks.pop();
+  // Recalculate current position
+  const n = DATA.poolers.length;
+  const totalPicks = DATA.draft.picks.length;
+  DATA.draft.currentRound = Math.floor(totalPicks / n) + 1;
+  DATA.draft.currentPick = totalPicks % n;
+  DATA.draft.completed = false;
+  saveData();
+  renderDraft();
+  toast('Dernier choix annulé');
+}
+
+function makePick(value, type) {
+  const n = DATA.poolers.length;
+  const order = getDraftOrder(DATA.draft.currentRound, n);
+  const poolerIdx = order[DATA.draft.currentPick];
+
+  DATA.draft.picks.push({
+    round: DATA.draft.currentRound,
+    poolerIdx,
+    value,
+    type
+  });
+
+  DATA.draft.currentPick++;
+  if (DATA.draft.currentPick >= n) {
+    DATA.draft.currentPick = 0;
+    DATA.draft.currentRound++;
+    if (DATA.draft.currentRound > DATA.draft.totalRounds) {
+      DATA.draft.completed = true;
+    }
+  }
+
+  saveData();
+  renderDraft();
+  document.getElementById('draft-search').value = '';
+  document.getElementById('draft-results').classList.remove('show');
+  toast(`✅ ${DATA.poolers[poolerIdx].name} a choisi: ${value}`);
+}
+
+function getAllDraftedValues() {
+  return new Set(DATA.draft.picks.map(p => norm(p.value)));
+}
+
+function onDraftSearch(query) {
+  const container = document.getElementById('draft-results');
+  const drafted = getAllDraftedValues();
+  const type = document.getElementById('pick-type').value;
+  const q = query ? norm(query) : '';
+  let items = [];
+
+  if (type === 'player') {
+    if (DATA.nhlData.skaters.length) {
+      const filtered = q
+        ? DATA.nhlData.skaters.filter(s => norm(s.name).includes(q) || norm(s.team).includes(q))
+        : DATA.nhlData.skaters;
+      const isReg = DATA.nhlData.skaters[0]?.regSeason;
+      items = filtered.slice(0, 25).map(s => ({
+        name: s.name,
+        detail: `${s.team} — ${s.points} pts${isReg ? ' (sais. rég.)' : ''}`,
+        taken: drafted.has(norm(s.name))
+      }));
+    }
+  } else if (type === 'goalie') {
+    if (DATA.nhlData.goalies.length) {
+      const filtered = q
+        ? DATA.nhlData.goalies.filter(g => norm(g.name).includes(q) || norm(g.team).includes(q))
+        : DATA.nhlData.goalies;
+      const isReg = DATA.nhlData.goalies[0]?.regSeason;
+      items = filtered.slice(0, 25).map(g => ({
+        name: g.name,
+        detail: `${g.team} — ${g.wins}V ${g.shutouts}BL${isReg ? ' (sais. rég.)' : ''}`,
+        taken: drafted.has(norm(g.name))
+      }));
+    }
+  } else if (type === 'team') {
+    if (DATA.nhlData.teams.length) {
+      const filtered = q
+        ? DATA.nhlData.teams.filter(t => norm(t.name).includes(q))
+        : DATA.nhlData.teams;
+      const isReg = DATA.nhlData.teams[0]?.regSeason;
+      items = filtered.slice(0, 25).map(t => ({
+        name: t.name,
+        detail: `${t.wins}V-${t.losses}D${isReg ? ' (sais. rég.)' : ''}`,
+        taken: drafted.has(norm(t.name))
+      }));
+    }
+  }
+
+  if (items.length === 0 && !q) {
+    container.classList.remove('show');
+    return;
+  }
+
+  // Allow free text entry if no exact match
+  if (q && q.length >= 2) {
+    const exactMatch = items.find(i => norm(i.name) === q);
+    if (!exactMatch) {
+      items.unshift({ name: query, detail: 'Entrée libre', taken: drafted.has(norm(query)), free: true });
+    }
+  }
+
+  container.innerHTML = items.map(i =>
+    `<div class="search-item ${i.taken ? 'taken' : ''}" onclick="makePick('${i.name.replace(/'/g,"\\'")}','${type}')">
+      <span>${i.name} ${i.taken ? '(déjà choisi)' : ''}</span>
+      <span class="team">${i.detail}</span>
+    </div>`
+  ).join('');
+  container.classList.add('show');
+}
+
+// Close search on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-container')) {
+    document.getElementById('draft-results')?.classList.remove('show');
+  }
+});
+
+function renderDraft() {
+  const n = DATA.poolers.length;
+  const d = DATA.draft;
+  const board = document.getElementById('draft-board');
+  const btnStart = document.getElementById('btn-start-draft');
+  const btnUndo = document.getElementById('btn-undo-pick');
+  const btnReset = document.getElementById('btn-reset-draft');
+  const searchWrap = document.getElementById('draft-search-wrap');
+  const statusEl = document.getElementById('draft-status');
+  const roundInfo = document.getElementById('draft-round-info');
+
+  btnStart.style.display = d.started ? 'none' : '';
+  btnUndo.style.display = d.started ? '' : 'none';
+  btnReset.style.display = d.started ? '' : 'none';
+  searchWrap.style.display = (d.started && !d.completed) ? '' : 'none';
+
+  if (d.completed) {
+    statusEl.textContent = '✅ Draft complété!';
+    roundInfo.textContent = `${d.picks.length} choix au total`;
+  } else if (d.started) {
+    const order = getDraftOrder(d.currentRound, n);
+    const currentPooler = DATA.poolers[order[d.currentPick]]?.name || '?';
+    statusEl.innerHTML = `Ronde ${d.currentRound}/${d.totalRounds} — Pick ${d.currentPick+1}/${n}`;
+    roundInfo.innerHTML = `Au tour de: <strong style="color:var(--gold)">${currentPooler}</strong>`;
+  } else {
+    statusEl.textContent = 'Draft non commencé';
+    roundInfo.textContent = '';
+  }
+
+  // Build grid
+  const cols = n + 1;
+  board.style.display = 'grid';
+  board.style.gridTemplateColumns = `60px repeat(${n}, 1fr)`;
+  board.innerHTML = '';
+
+  // Header row
+  board.innerHTML += `<div class="draft-cell header">Ronde</div>`;
+  for (let i = 0; i < n; i++) {
+    board.innerHTML += `<div class="draft-cell header">${DATA.poolers[i].name}</div>`;
+  }
+
+  // Each round — columns are always in pooler order (0..n-1)
+  // The snake order only affects WHO picks in which sequence, not where they appear
+  for (let r = 1; r <= d.totalRounds; r++) {
+    board.innerHTML += `<div class="draft-cell round-label">${r}</div>`;
+    const order = getDraftOrder(r, n);
+    for (let col = 0; col < n; col++) {
+      // Find pick for this pooler (col) in this round
+      const pick = d.picks.find(pk => pk.round === r && pk.poolerIdx === col);
+      // Determine if this pooler is the current picker
+      const pickPos = order.indexOf(col); // position in the snake order
+      const isCurrent = d.started && !d.completed && r === d.currentRound && pickPos === d.currentPick;
+      let cls = 'draft-cell';
+      if (isCurrent) cls += ' current';
+      if (pick?.type === 'goalie') cls += ' goalie';
+      if (pick?.type === 'team') cls += ' team-pick';
+      const label = pick ? pick.value : (isCurrent ? '⏳' : '');
+      const typeIcon = pick?.type === 'goalie' ? '🥅 ' : pick?.type === 'team' ? '🏒 ' : '';
+      board.innerHTML += `<div class="${cls}" title="${pick?.type || ''}">${typeIcon}${label}</div>`;
+    }
+  }
+}
+
+// ============================================================
+// PREDICTIONS — Auth + Deadlines
+// ============================================================
+let loggedPooler = null;
+
+const ROUND_LABELS = { 1: 'Ronde 1', 2: 'Ronde 2', 3: 'Finales de conférence', 4: 'Finale de la Coupe Stanley' };
+const ROUND_SERIES_COUNT = { 1: 8, 2: 4, 3: 2, 4: 1 };
+
+function isDeadlinePassed(key) {
+  const d = DATA.deadlines[key];
+  if (!d) return false;
+  return new Date() > new Date(d);
+}
+
+function formatDeadline(key) {
+  const d = DATA.deadlines[key];
+  if (!d) return { text: 'Date à déterminer', cls: 'deadline-tbd' };
+  const date = new Date(d);
+  const now = new Date();
+  const formatted = date.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+  if (now > date) return { text: 'Fermé — ' + formatted, cls: 'deadline-closed' };
+  return { text: 'Avant le ' + formatted, cls: 'deadline-open' };
+}
+
+function createPassword() {
+  const poolerName = document.getElementById('pred-pooler').value;
+  const pw = document.getElementById('pred-new-password').value;
+  if (!poolerName || !pw) return toast('Choisissez un pooler et un mot de passe');
+  if (DATA.passwords[poolerName]) return toast('Ce pooler a déjà un mot de passe');
+  DATA.passwords[poolerName] = pw;
+  saveData();
+  document.getElementById('pred-new-password').value = '';
+  toast(`✅ Mot de passe créé pour ${poolerName}`);
+}
+
+function loginPredictions() {
+  const poolerName = document.getElementById('pred-pooler').value;
+  const pw = document.getElementById('pred-password').value;
+  const errEl = document.getElementById('pred-login-error');
+  if (!DATA.passwords[poolerName]) {
+    errEl.textContent = 'Aucun mot de passe configuré pour ce pooler. Créez-en un ci-dessous.';
+    errEl.style.display = '';
+    return;
+  }
+  if (DATA.passwords[poolerName] !== pw) {
+    errEl.textContent = 'Mot de passe incorrect.';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  loggedPooler = poolerName;
+  document.getElementById('pred-login').style.display = 'none';
+  document.getElementById('pred-content').style.display = '';
+  document.getElementById('pred-logged-name').textContent = poolerName;
+  renderPredictionsContent();
+}
+
+function logoutPredictions() {
+  loggedPooler = null;
+  document.getElementById('pred-login').style.display = '';
+  document.getElementById('pred-content').style.display = 'none';
+  document.getElementById('pred-password').value = '';
+}
+
+function renderPredictions() {
+  const sel = document.getElementById('pred-pooler');
+  if (!sel.options.length || sel.options.length !== DATA.poolers.length) {
+    sel.innerHTML = DATA.poolers.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+  }
+  if (loggedPooler) {
+    document.getElementById('pred-login').style.display = 'none';
+    document.getElementById('pred-content').style.display = '';
+    document.getElementById('pred-logged-name').textContent = loggedPooler;
+    renderPredictionsContent();
+  } else {
+    document.getElementById('pred-login').style.display = '';
+    document.getElementById('pred-content').style.display = 'none';
+  }
+}
+
+function renderPredictionsContent(adminOverride) {
+  if (!loggedPooler) return;
+  const preds = DATA.predictions[loggedPooler] || {};
+  const isAdmin = adminOverride === true;
+
+  // Finale deadline
+  const finDL = formatDeadline('finale');
+  const finLocked = isAdmin ? false : isDeadlinePassed('finale');
+  document.getElementById('pred-finale-deadline').textContent = finDL.text;
+  document.getElementById('pred-finale-deadline').className = 'badge ' + finDL.cls;
+
+  const champEl = document.getElementById('pred-champion');
+  const finalistEl = document.getElementById('pred-finalist');
+  const connEl = document.getElementById('pred-connsmythe');
+  champEl.value = preds.champion || '';
+  finalistEl.value = preds.finalist || '';
+  connEl.value = preds.connSmythe || '';
+  champEl.disabled = finLocked;
+  finalistEl.disabled = finLocked;
+  connEl.disabled = finLocked;
+
+  // Round predictions
+  const container = document.getElementById('pred-rounds');
+  container.innerHTML = '';
+
+  for (const roundNum of [1, 2, 3, 4]) {
+    const series = DATA.rounds[roundNum] || [];
+    const expectedCount = ROUND_SERIES_COUNT[roundNum];
+    const roundPreds = preds.rounds?.[roundNum] || [];
+    const dl = formatDeadline(roundNum);
+    const locked = isAdmin ? false : isDeadlinePassed(roundNum);
+
+    let html = `<div class="card pred-round">
+      <div class="card-header">
+        <h3 style="margin:0">${ROUND_LABELS[roundNum]}</h3>
+        <span class="badge ${dl.cls}">${dl.text}</span>
+      </div>`;
+
+    if (series.length) {
+      // Real matchups loaded
+      series.forEach((s, i) => {
+        const pred = roundPreds[i] || {};
+        const teams = s.split(/\s+vs\s+/i);
+        html += `<div class="pred-series">
+          <label>${s}</label>
+          <select data-round="${roundNum}" data-idx="${i}" data-field="winner" style="min-width:150px" ${locked?'disabled':''}>
+            <option value="">Gagnant...</option>
+            ${teams.map(t => `<option value="${t.trim()}" ${pred.winner === t.trim() ? 'selected' : ''}>${t.trim()}</option>`).join('')}
+          </select>
+          <span style="color:var(--text2);font-size:13px">en</span>
+          <select data-round="${roundNum}" data-idx="${i}" data-field="games" style="width:60px" ${locked?'disabled':''}>
+            <option value="">—</option>
+            ${[4,5,6,7].map(g => `<option value="${g}" ${pred.games == g ? 'selected' : ''}>${g}</option>`).join('')}
+          </select>
+          <span style="font-size:13px;color:var(--text2)">matchs</span>
+        </div>`;
+      });
+    } else {
+      // Placeholder for future matchups
+      for (let i = 0; i < expectedCount; i++) {
+        html += `<div class="pred-series" style="opacity:.4">
+          <label>Série ${i+1} — Équipes à venir</label>
+          <select disabled style="min-width:150px"><option>Gagnant...</option></select>
+          <span style="color:var(--text2);font-size:13px">en</span>
+          <select disabled style="width:60px"><option>—</option></select>
+          <span style="font-size:13px;color:var(--text2)">matchs</span>
+        </div>`;
+      }
+    }
+
+    html += '</div>';
+    container.innerHTML += html;
+  }
+}
+
+function savePredictions() {
+  if (!loggedPooler) return;
+  const isAdmin = adminLoggedIn;
+
+  // Check which sections are still open
+  const preds = DATA.predictions[loggedPooler] || { champion:'', finalist:'', connSmythe:'', rounds:{} };
+
+  // Finale (only save if not locked, or admin)
+  if (isAdmin || !isDeadlinePassed('finale')) {
+    preds.champion = document.getElementById('pred-champion').value;
+    preds.finalist = document.getElementById('pred-finalist').value;
+    preds.connSmythe = document.getElementById('pred-connsmythe').value;
+  }
+
+  // Rounds (only save unlocked rounds, or admin)
+  for (const roundNum of [1, 2, 3, 4]) {
+    if (!isAdmin && isDeadlinePassed(roundNum)) continue;
+    preds.rounds[roundNum] = [];
+    const series = DATA.rounds[roundNum] || [];
+    series.forEach((s, i) => {
+      const winnerEl = document.querySelector(`[data-round="${roundNum}"][data-idx="${i}"][data-field="winner"]`);
+      const gamesEl = document.querySelector(`[data-round="${roundNum}"][data-idx="${i}"][data-field="games"]`);
+      preds.rounds[roundNum].push({
+        series: s,
+        winner: winnerEl?.value || '',
+        games: gamesEl?.value || ''
+      });
+    });
+  }
+
+  DATA.predictions[loggedPooler] = preds;
+  saveData();
+  toast(`✅ Prédictions de ${loggedPooler} sauvegardées!`);
+}
+
+// ============================================================
+// POOLER DETAIL
+// ============================================================
+function renderPoolerDetail() {
+  const tabsEl = document.getElementById('pooler-tabs');
+  const detailEl = document.getElementById('pooler-detail');
+
+  if (!DATA.poolers.length) {
+    detailEl.innerHTML = '<p style="color:var(--text2)">Aucun pooler configuré.</p>';
+    return;
+  }
+
+  const activeTab = tabsEl.querySelector('.tab-btn.active')?.dataset.pooler || DATA.poolers[0].name;
+
+  tabsEl.innerHTML = DATA.poolers.map(p =>
+    `<div class="tab-btn ${p.name === activeTab ? 'active' : ''}" data-pooler="${p.name}" onclick="selectPoolerTab('${p.name.replace(/'/g, "\\'")}')">${p.name}</div>`
+  ).join('');
+
+  const poolerName = activeTab;
+  const picks = getPoolerPicks(poolerName);
+  const playerPts = calcPlayerPoints(poolerName);
+  const goaliePts = calcGoaliePoints(poolerName);
+  const teamPts = calcTeamPoints(poolerName);
+  const predPts = calcPredictionPoints(poolerName);
+  const bonusPts = calcFinaleBonus(poolerName);
+  const total = playerPts + goaliePts + teamPts + predPts + bonusPts;
+
+  let html = `
+    <div class="pooler-stats">
+      <div class="stat-card"><div class="val">${total}</div><div class="lbl">Total</div></div>
+      <div class="stat-card"><div class="val">${playerPts}</div><div class="lbl">Joueurs</div></div>
+      <div class="stat-card"><div class="val">${goaliePts}</div><div class="lbl">Gardien</div></div>
+      <div class="stat-card"><div class="val">${teamPts}</div><div class="lbl">Équipe</div></div>
+      <div class="stat-card"><div class="val">${predPts}</div><div class="lbl">Prédictions</div></div>
+      <div class="stat-card"><div class="val">${bonusPts}</div><div class="lbl">Bonus Finale</div></div>
+    </div>
+  `;
+
+  const eliminated = getEliminatedTeams();
+  const elimStyle = 'text-decoration:line-through;color:var(--red);opacity:.6';
+
+  // Split players into forwards and defensemen based on NHL data
+  const forwards = [];
+  const defensemen = [];
+  for (const name of picks.players) {
+    const s = DATA.nhlData.skaters.find(sk => norm(sk.name) === norm(name));
+    if (s?.pos === 'D') {
+      defensemen.push({ name, stats: s });
+    } else {
+      forwards.push({ name, stats: s });
+    }
+  }
+
+  // Helpers for images
+  function teamLogoUrl(abbrev) {
+    return abbrev ? `https://assets.nhle.com/logos/nhl/svg/${abbrev}_dark.svg` : '';
+  }
+  function headshotImg(src) {
+    return src ? `<img class="player-headshot" src="${src}" onerror="this.style.display='none'" loading="lazy">` : '';
+  }
+  function teamLogoImg(abbrev, cls) {
+    return abbrev ? `<img class="${cls||'team-logo'}" src="${teamLogoUrl(abbrev)}" onerror="this.style.display='none'" loading="lazy">` : '';
+  }
+
+  // Helper to render a skater row
+  function skaterRow(name, s) {
+    const elim = isPlayerEliminated(name, eliminated);
+    const rowStyle = elim ? `style="${elimStyle}"` : '';
+    const elimBadge = elim ? ' <span class="badge badge-red">Éliminé</span>' : '';
+    return `<tr ${rowStyle}>
+      <td><div class="player-cell">${headshotImg(s?.headshot)}<span>${name}${elimBadge}</span></div></td>
+      <td><div class="team-cell">${teamLogoImg(s?.team)}<span>${s?.team||'—'}</span></div></td>
+      <td style="text-align:right">${s?.gp||0}</td><td style="text-align:right">${s?.goals||0}</td><td style="text-align:right">${s?.assists||0}</td><td style="text-align:right;font-weight:700">${s?.points||0}</td></tr>`;
+  }
+
+  const skaterHeader = '<thead><tr><th>Nom</th><th>Équipe</th><th style="text-align:right">PJ</th><th style="text-align:right">B</th><th style="text-align:right">A</th><th style="text-align:right">Pts</th></tr></thead>';
+
+  // Attaquants
+  if (forwards.length) {
+    html += `<div class="card"><h3>Attaquants</h3><table>${skaterHeader}<tbody>`;
+    for (const f of forwards) html += skaterRow(f.name, f.stats);
+    html += '</tbody></table></div>';
+  }
+
+  // Défenseurs
+  if (defensemen.length) {
+    html += `<div class="card"><h3>Défenseurs</h3><table>${skaterHeader}<tbody>`;
+    for (const d of defensemen) html += skaterRow(d.name, d.stats);
+    html += '</tbody></table></div>';
+  }
+
+  // Gardien
+  if (picks.goalie) {
+    const g = DATA.nhlData.goalies.find(gl => norm(gl.name) === norm(picks.goalie));
+    const goalieElim = isPlayerEliminated(picks.goalie, eliminated);
+    const gStyle = goalieElim ? `style="${elimStyle}"` : '';
+    const gBadge = goalieElim ? ' <span class="badge badge-red">Éliminé</span>' : '';
+    html += `<div class="card"><h3>Gardien</h3><table><thead><tr><th>Nom</th><th>Équipe</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">BL</th><th style="text-align:right">Pts Pool</th></tr></thead><tbody>
+      <tr ${gStyle}>
+        <td><div class="player-cell">${headshotImg(g?.headshot)}<span>${picks.goalie}${gBadge}</span></div></td>
+        <td><div class="team-cell">${teamLogoImg(g?.team)}<span>${g?.team||'—'}</span></div></td>
+        <td style="text-align:right">${g?.gp||0}</td><td style="text-align:right">${g?.wins||0}</td><td style="text-align:right">${g?.shutouts||0}</td><td style="text-align:right;font-weight:700">${goaliePts}</td></tr>
+    </tbody></table></div>`;
+  }
+
+  // Équipe
+  if (picks.team) {
+    const t = DATA.nhlData.teams.find(tm => norm(tm.name) === norm(picks.team));
+    const teamElim = isTeamEliminated(picks.team, eliminated);
+    const tStyle = teamElim ? `style="${elimStyle}"` : '';
+    const tBadge = teamElim ? ' <span class="badge badge-red">Éliminée</span>' : '';
+    html += `<div class="card"><h3>Équipe</h3><table><thead><tr><th>Nom</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">D</th><th style="text-align:right">Pts Pool</th></tr></thead><tbody>
+      <tr ${tStyle}>
+        <td><div class="player-cell">${teamLogoImg(t?.abbrev, 'team-logo-lg')}<span>${picks.team}${tBadge}</span></div></td>
+        <td style="text-align:right">${t?.gp||0}</td><td style="text-align:right">${t?.wins||0}</td><td style="text-align:right">${t?.losses||0}</td><td style="text-align:right;font-weight:700">${teamPts}</td></tr>
+    </tbody></table></div>`;
+  }
+
+  // Predictions — only show sections whose deadline has passed
+  const preds = DATA.predictions[poolerName];
+  html += '<div class="card"><h3>Prédictions</h3>';
+
+  if (!preds) {
+    html += '<p style="color:var(--text2);font-size:13px">Aucune prédiction enregistrée.</p>';
+  } else {
+    // Finale predictions
+    if (isDeadlinePassed('finale')) {
+      const res = DATA.finaleResults;
+      const champIcon = res.champion ? (norm(preds.champion) === norm(res.champion) ? '<span class="badge badge-green">10 pts</span>' : '<span class="badge badge-red">0 pt</span>') : '';
+      const finIcon = res.finalist ? (norm(preds.finalist) === norm(res.finalist) ? '<span class="badge badge-green">5 pts</span>' : '<span class="badge badge-red">0 pt</span>') : '';
+      const csIcon = res.connSmythe ? (norm(preds.connSmythe) === norm(res.connSmythe) ? '<span class="badge badge-green">5 pts</span>' : '<span class="badge badge-red">0 pt</span>') : '';
+      html += `<p style="margin-bottom:8px"><strong>Finale:</strong> Champion: ${preds.champion||'—'} ${champIcon}, Finaliste: ${preds.finalist||'—'} ${finIcon}, Conn Smythe: ${preds.connSmythe||'—'} ${csIcon}</p>`;
+    } else {
+      html += '<p style="color:var(--text2);font-size:13px;margin-bottom:8px">Prédictions de la finale: <span class="badge deadline-open">visibles après l\'échéance</span></p>';
+    }
+
+    // Round predictions
+    for (const rn of [1,2,3,4]) {
+      const rp = preds.rounds?.[rn] || [];
+      if (!rp.length) continue;
+      if (!isDeadlinePassed(rn)) {
+        html += `<p style="margin-top:8px;color:var(--text2);font-size:13px">${ROUND_LABELS[rn]}: <span class="badge deadline-open">visibles après l'échéance</span></p>`;
+        continue;
+      }
+      html += `<p style="margin-top:8px;font-weight:600">${ROUND_LABELS[rn]}:</p>`;
+      rp.forEach((p, idx) => {
+        if (!p.winner) return;
+        const result = (DATA.results[rn] || [])[idx];
+        let icon = '';
+        if (result?.winner) {
+          if (norm(p.winner) === norm(result.winner)) {
+            icon = p.games == result.games ? '<span class="badge badge-green">3 pts</span>' : '<span class="badge badge-blue">1 pt</span>';
+          } else {
+            icon = '<span class="badge badge-red">0 pt</span>';
+          }
+        }
+        html += `<p style="font-size:13px;color:var(--text2);margin-left:12px">${p.series}: ${p.winner} en ${p.games} ${icon}</p>`;
+      });
+    }
+  }
+  html += '</div>';
+
+  detailEl.innerHTML = html;
+}
+
+function selectPoolerTab(name) {
+  document.querySelectorAll('#pooler-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.pooler === name));
+  renderPoolerDetail();
+}
+
+// ============================================================
+// CONFIG — Admin
+// ============================================================
+let adminLoggedIn = false;
+
+function loginAdmin() {
+  const pw = document.getElementById('config-admin-pw').value;
+  const adminName = DATA.adminPooler;
+  const errEl = document.getElementById('config-login-error');
+  if (!DATA.passwords[adminName]) {
+    errEl.textContent = `Aucun mot de passe configuré pour ${adminName}. Allez d'abord dans Prédictions pour en créer un.`;
+    errEl.style.display = '';
+    return;
+  }
+  if (DATA.passwords[adminName] !== pw) {
+    errEl.textContent = 'Mot de passe incorrect.';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  adminLoggedIn = true;
+  document.getElementById('config-login').style.display = 'none';
+  document.getElementById('config-content').style.display = '';
+  document.getElementById('config-admin-name').textContent = adminName;
+  renderConfigContent();
+}
+
+function logoutAdmin() {
+  adminLoggedIn = false;
+  document.getElementById('config-login').style.display = '';
+  document.getElementById('config-content').style.display = 'none';
+  document.getElementById('config-admin-pw').value = '';
+}
+
+function adminEditPredictions() {
+  const poolerName = document.getElementById('admin-edit-pooler').value;
+  if (!poolerName) return;
+  // Log into predictions as that pooler (admin override)
+  loggedPooler = poolerName;
+  // Switch to predictions tab
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-page="predictions"]').classList.add('active');
+  document.getElementById('page-predictions').classList.add('active');
+  document.getElementById('pred-login').style.display = 'none';
+  document.getElementById('pred-content').style.display = '';
+  document.getElementById('pred-logged-name').textContent = poolerName + ' (admin)';
+  renderPredictionsContent(true); // true = admin mode, ignore deadlines
+}
+
+function resetPoolerPassword(idx) {
+  const name = DATA.poolers[idx].name;
+  if (!confirm(`Réinitialiser le mot de passe de ${name}? Il/elle devra en créer un nouveau.`)) return;
+  delete DATA.passwords[name];
+  saveData();
+  renderConfigContent();
+  toast(`Mot de passe de ${name} réinitialisé`);
+}
+
+function renderConfig() {
+  if (adminLoggedIn) {
+    document.getElementById('config-login').style.display = 'none';
+    document.getElementById('config-content').style.display = '';
+    document.getElementById('config-admin-name').textContent = DATA.adminPooler;
+    renderConfigContent();
+  } else {
+    document.getElementById('config-login').style.display = '';
+    document.getElementById('config-content').style.display = 'none';
+  }
+}
+
+function renderConfigContent() {
+  // Poolers table with password status
+  const tbody = document.getElementById('config-poolers');
+  tbody.innerHTML = DATA.poolers.map((p, i) =>
+    `<tr>
+      <td><input type="text" value="${p.name}" onchange="DATA.poolers[${i}].name=this.value;saveData()" style="width:150px">${p.name===DATA.adminPooler?' <span class="badge badge-blue">Admin</span>':''}</td>
+      <td><input type="checkbox" ${p.paid?'checked':''} onchange="DATA.poolers[${i}].paid=this.checked;saveData()"></td>
+      <td>${DATA.passwords[p.name] ? '<span class="badge badge-green">Actif</span>' : '<span class="badge deadline-tbd">Aucun</span>'}</td>
+      <td style="display:flex;gap:4px">
+        ${DATA.passwords[p.name] ? `<button class="btn btn-sm" onclick="resetPoolerPassword(${i})" title="Réinitialiser mdp">🔑</button>` : ''}
+        ${p.name!==DATA.adminPooler ? `<button class="btn btn-danger btn-sm" onclick="removePooler(${i})">✕</button>` : ''}
+      </td>
+    </tr>`
+  ).join('');
+
+  // Admin edit pooler dropdown
+  const editSel = document.getElementById('admin-edit-pooler');
+  editSel.innerHTML = DATA.poolers.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+
+  // Conn Smythe
+  document.getElementById('res-connsmythe').value = DATA.finaleResults.connSmythe || '';
+
+  // Bracket status summary
+  const statusEl = document.getElementById('config-bracket-status');
+  const totalSeries = Object.values(DATA.rounds).reduce((a, r) => a + r.length, 0);
+  const completedSeries = Object.values(DATA.results).reduce((a, r) => a + r.filter(x => x.winner).length, 0);
+  const lastUpdate = DATA.nhlData.lastUpdate ? new Date(DATA.nhlData.lastUpdate).toLocaleString('fr-CA') : 'jamais';
+
+  let html = `<div style="font-size:13px;line-height:2">`;
+  html += `<strong>Dernière mise à jour:</strong> ${lastUpdate}<br>`;
+  html += `<strong>Joueurs:</strong> ${DATA.nhlData.skaters.length} | <strong>Gardiens:</strong> ${DATA.nhlData.goalies.length} | <strong>Équipes:</strong> ${DATA.nhlData.teams.length}<br>`;
+  html += `<strong>Séries:</strong> ${totalSeries} chargées, ${completedSeries} terminées<br>`;
+  if (DATA.finaleResults.champion) {
+    html += `<strong>Champion:</strong> ${DATA.finaleResults.champion} | <strong>Finaliste:</strong> ${DATA.finaleResults.finalist}<br>`;
+  }
+
+  // Show loaded matchups as read-only summary
+  for (const rn of [1,2,3,4]) {
+    const series = DATA.rounds[rn] || [];
+    const results = DATA.results[rn] || [];
+    if (!series.length) continue;
+    html += `<div style="margin-top:8px"><strong>Ronde ${rn}${rn===4?' (Finale)':''}:</strong></div>`;
+    series.forEach((s, i) => {
+      const res = results[i] || {};
+      const statusIcon = res.winner ? '✅' : '⏳';
+      const detail = res.winner ? `${res.winner} en ${res.games}` : 'En cours';
+      html += `<div style="margin-left:12px;color:var(--text2)">${statusIcon} ${s} — ${detail}</div>`;
+    });
+  }
+  html += '</div>';
+  statusEl.innerHTML = html;
+
+  // Deadlines
+  const dlEl = document.getElementById('config-deadlines');
+  const dlLabels = { finale: 'Finale (champion, finaliste, Conn Smythe)', 1: 'Ronde 1', 2: 'Ronde 2', 3: 'Finales de conférence', 4: 'Finale de la Coupe' };
+  dlEl.innerHTML = Object.entries(dlLabels).map(([key, label]) => {
+    const val = DATA.deadlines[key] ? new Date(DATA.deadlines[key]).toISOString().slice(0,16) : '';
+    return `<div>
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">${label}</label>
+      <input type="datetime-local" value="${val}" style="width:100%" onchange="DATA.deadlines['${key}']=this.value?new Date(this.value+':00').toISOString():'';saveData();toast('Échéance mise à jour')">
+    </div>`;
+  }).join('');
+}
+
+function addPooler() {
+  const name = prompt('Nom du pooler:');
+  if (!name) return;
+  DATA.poolers.push({ name, paid: false });
+  saveData();
+  renderConfig();
+  toast(`${name} ajouté!`);
+}
+
+function removePooler(idx) {
+  if (!confirm(`Retirer ${DATA.poolers[idx].name}?`)) return;
+  DATA.poolers.splice(idx, 1);
+  saveData();
+  renderConfig();
+}
+
+function saveFinaleResults() {
+  DATA.finaleResults.connSmythe = document.getElementById('res-connsmythe').value;
+  saveData();
+  renderStandings();
+}
+
+// ============================================================
+// IMPORT / EXPORT
+// ============================================================
+function exportData() {
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pool-series-2026-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('📥 Export téléchargé!');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      DATA = JSON.parse(e.target.result);
+      saveData();
+      location.reload();
+    } catch(err) {
+      toast('❌ Fichier invalide');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+renderStandings();
+updateDataStatus();
+
+// Auto-refresh NHL data on page load (silently, shows toast only on success)
+refreshAll();
+</script>
+</body>
+</html>
