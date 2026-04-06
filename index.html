@@ -219,7 +219,13 @@ input::placeholder { color: var(--text2); }
     <span id="draft-round-info"></span>
   </div>
 
-  <div class="card" id="draft-controls" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <div class="card" id="draft-admin-login" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span style="color:var(--text2);font-size:14px">🔒 Seul l'admin (<strong id="draft-admin-label"></strong>) peut gérer le draft.</span>
+    <input type="password" id="draft-admin-pw" placeholder="Mot de passe admin" style="width:200px" onkeydown="if(event.key==='Enter')loginDraftAdmin()">
+    <button class="btn btn-primary" onclick="loginDraftAdmin()">Connexion</button>
+    <span id="draft-login-error" style="color:var(--red);font-size:13px;display:none"></span>
+  </div>
+  <div class="card" id="draft-controls" style="display:none;gap:12px;align-items:center;flex-wrap:wrap">
     <button class="btn btn-primary" id="btn-start-draft" onclick="startDraft()">Commencer le Draft</button>
     <button class="btn" id="btn-undo-pick" onclick="undoLastPick()" style="display:none">↩ Annuler dernier choix</button>
     <button class="btn btn-danger" id="btn-reset-draft" onclick="resetDraft()" style="display:none">Réinitialiser le Draft</button>
@@ -235,6 +241,7 @@ input::placeholder { color: var(--text2); }
         <option value="team">Équipe</option>
       </select>
     </div>
+    <button class="btn" onclick="logoutDraftAdmin()" style="margin-left:auto;font-size:12px">🔓 Déconnexion</button>
   </div>
 
   <div class="card" style="overflow-x:auto">
@@ -920,6 +927,33 @@ function renderStandings() {
 // ============================================================
 // DRAFT
 // ============================================================
+let draftAdminLoggedIn = false;
+
+function loginDraftAdmin() {
+  const pw = document.getElementById('draft-admin-pw').value;
+  const adminName = DATA.adminPooler;
+  const errEl = document.getElementById('draft-login-error');
+  if (!DATA.passwords[adminName]) {
+    errEl.textContent = `Aucun mot de passe configuré pour ${adminName}. Allez dans Prédictions pour en créer un.`;
+    errEl.style.display = '';
+    return;
+  }
+  if (DATA.passwords[adminName] !== pw) {
+    errEl.textContent = 'Mot de passe incorrect.';
+    errEl.style.display = '';
+    return;
+  }
+  errEl.style.display = 'none';
+  draftAdminLoggedIn = true;
+  renderDraft();
+}
+
+function logoutDraftAdmin() {
+  draftAdminLoggedIn = false;
+  document.getElementById('draft-admin-pw').value = '';
+  renderDraft();
+}
+
 function getDraftOrder(round, numPoolers) {
   // Snake draft: odd rounds = normal, even rounds = reverse
   const order = Array.from({length: numPoolers}, (_, i) => i);
@@ -1076,6 +1110,18 @@ function renderDraft() {
   const searchWrap = document.getElementById('draft-search-wrap');
   const statusEl = document.getElementById('draft-status');
   const roundInfo = document.getElementById('draft-round-info');
+  const loginPanel = document.getElementById('draft-admin-login');
+  const controlsPanel = document.getElementById('draft-controls');
+
+  // Admin gate: show login or controls
+  document.getElementById('draft-admin-label').textContent = DATA.adminPooler;
+  if (draftAdminLoggedIn) {
+    loginPanel.style.display = 'none';
+    controlsPanel.style.display = 'flex';
+  } else {
+    loginPanel.style.display = 'flex';
+    controlsPanel.style.display = 'none';
+  }
 
   btnStart.style.display = d.started ? 'none' : '';
   btnUndo.style.display = d.started ? '' : 'none';
