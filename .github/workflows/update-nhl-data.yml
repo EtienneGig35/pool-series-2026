@@ -2,8 +2,8 @@ name: Update NHL Data
 
 on:
   schedule:
-    # Every 6 hours during playoffs (April-June)
-    - cron: '0 */6 * 4-6 *'
+    # Every 3 hours during playoffs (April-June)
+    - cron: '0 */3 * 4-6 *'
   workflow_dispatch: # Allow manual trigger
 
 permissions:
