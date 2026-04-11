@@ -205,9 +205,11 @@ input::placeholder { color: var(--text2); }
       <strong>Points joueurs:</strong> 1 pt par point marqué (but ou aide) en séries.<br>
       <strong>Gardien:</strong> 2 pts par victoire + 2 pts supplémentaires par blanchissage.<br>
       <strong>Équipe:</strong> 2 pts par victoire de l'équipe en séries.<br>
-      <strong>Prédictions rondes:</strong> 3 pts si bonne équipe + bon nombre de matchs, 1 pt si bonne équipe seulement.<br>
+      <strong>Prédictions rondes:</strong> 5 pts bonne équipe + bon nombre de matchs, 3 pts bonne équipe seulement, 1 pt mauvaise équipe mais bonne prédiction d'une série en 7.<br>
       <strong>Bonus finale:</strong> 10 pts champion Coupe Stanley, 5 pts finaliste, 5 pts Conn Smythe.<br>
-      <strong>Distribution:</strong> #1 points: 30$, #1 prédictions: 30$, #1 total: 140$
+      <strong>Composition:</strong> 6 attaquants, 2 défenseurs, 1 gardien, 1 équipe.<br>
+      <strong>Coût:</strong> 25$ par pooler.<br>
+      <strong>Distribution:</strong> <span id="standings-distribution"></span>
     </div>
   </div>
 </div>
@@ -231,16 +233,18 @@ input::placeholder { color: var(--text2); }
     <button class="btn" id="btn-undo-pick" onclick="undoLastPick()" style="display:none">↩ Annuler dernier choix</button>
     <button class="btn btn-danger" id="btn-reset-draft" onclick="resetDraft()" style="display:none">Réinitialiser le Draft</button>
     <div class="search-container" id="draft-search-wrap" style="display:none;flex:1;min-width:250px">
-      <input type="text" id="draft-search" placeholder="Chercher un joueur, gardien ou équipe..." style="width:100%" oninput="onDraftSearch(this.value)" onfocus="onDraftSearch(this.value)">
+      <input type="text" id="draft-search" placeholder="Chercher un attaquant, défenseur, gardien ou équipe..." style="width:100%" oninput="onDraftSearch(this.value)" onfocus="onDraftSearch(this.value)">
       <div class="search-results" id="draft-results"></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <label style="font-size:12px;color:var(--text2)">Type:</label>
       <select id="pick-type" style="font-size:12px">
-        <option value="player">Joueur</option>
+        <option value="forward">Attaquant</option>
+        <option value="defenseman">Défenseur</option>
         <option value="goalie">Gardien</option>
         <option value="team">Équipe</option>
       </select>
+      <span id="draft-composition" style="font-size:11px;color:var(--text2);margin-left:8px"></span>
     </div>
     <button class="btn" onclick="logoutDraftAdmin()" style="margin-left:auto;font-size:12px">🔓 Déconnexion</button>
   </div>
@@ -420,16 +424,21 @@ input::placeholder { color: var(--text2); }
       Ton équipe te donne <strong style="color:var(--text)">2 points par victoire</strong> en séries.<br><br>
       <strong style="color:var(--accent)">Prédictions par ronde</strong><br>
       Pour chaque série, tu prédis l'équipe gagnante et le nombre de matchs.<br>
-      — <strong style="color:var(--text)">3 points</strong> si tu prédis la bonne équipe ET le bon nombre de matchs.<br>
-      — <strong style="color:var(--text)">1 point</strong> si tu prédis la bonne équipe seulement.<br><br>
+      — <strong style="color:var(--text)">5 points</strong> si tu prédis la bonne équipe ET le bon nombre de matchs.<br>
+      — <strong style="color:var(--text)">3 points</strong> si tu prédis la bonne équipe seulement.<br>
+      — <strong style="color:var(--text)">1 point</strong> si tu prédis la mauvaise équipe, mais que tu avais prédit une série en 7 matchs et qu'elle va effectivement en 7.<br><br>
       <strong style="color:var(--accent)">Bonus Finale</strong><br>
       — <strong style="color:var(--text)">10 points</strong> si tu prédis le champion de la Coupe Stanley.<br>
       — <strong style="color:var(--text)">5 points</strong> si tu prédis le finaliste (perdant de la finale).<br>
       — <strong style="color:var(--text)">5 points</strong> si tu prédis le gagnant du trophée Conn Smythe (MVP des séries).<br><br>
+      <strong style="color:var(--accent)">Coût de participation</strong><br>
+      <strong style="color:var(--text)">25$</strong> par pooler.<br><br>
       <strong style="color:var(--gold)">💰 Distribution des prix</strong><br>
-      — <strong style="color:var(--text)">#1 Points (joueurs + gardien + équipe):</strong> 30$<br>
-      — <strong style="color:var(--text)">#1 Prédictions:</strong> 30$<br>
-      — <strong style="color:var(--text)">#1 Total général:</strong> 140$
+      La cagnotte totale = 25$ × nombre de poolers. Elle est distribuée ainsi:<br>
+      — <strong style="color:var(--text)">70%</strong> au gagnant du total de points (55% si 10+ poolers)<br>
+      — <strong style="color:var(--text)">15%</strong> au gagnant des prédictions<br>
+      — <strong style="color:var(--text)">15%</strong> au gagnant des points (joueurs + gardien + équipe)<br>
+      — Si 10+ poolers: <strong style="color:var(--text)">15%</strong> au 2e du total de points
     </div>
   </div>
 
@@ -437,14 +446,16 @@ input::placeholder { color: var(--text2); }
   <div class="card">
     <h3>👥 Composition de ton équipe</h3>
     <div style="font-size:14px;color:var(--text2);line-height:2">
-      Chaque pooler se bâtit une équipe via le Draft. Le draft comprend <strong style="color:var(--text)">10 rondes</strong> au total. À chaque ronde, tu choisis un élément parmi les trois catégories suivantes:<br><br>
-      <strong style="color:var(--accent)">🏒 Joueur (attaquant ou défenseur)</strong><br>
-      Tous les joueurs des 16 équipes en séries sont disponibles. Chaque joueur ne peut être choisi qu'une seule fois dans tout le pool.<br><br>
-      <strong style="color:var(--accent)">🥅 Gardien de but</strong><br>
-      Les gardiens titulaires des équipes en séries. Un gardien par sélection, aussi unique au pool.<br><br>
-      <strong style="color:var(--accent)">🏟️ Équipe</strong><br>
-      Tu peux aussi drafter une équipe complète pour accumuler des points sur ses victoires. Chaque équipe est unique au pool.<br><br>
-      <strong style="color:var(--text)">Il n'y a aucune restriction</strong> sur la répartition — tu peux prendre 10 joueurs, ou un mix de joueurs, gardiens et équipes selon ta stratégie. C'est à toi de bâtir la meilleure combinaison!
+      Chaque pooler se bâtit une équipe via le Draft. Le draft comprend <strong style="color:var(--text)">10 rondes</strong> au total. La composition de chaque équipe est fixe:<br><br>
+      <strong style="color:var(--accent)">🏒 6 Attaquants</strong><br>
+      Les centres, ailiers gauches et ailiers droits des 16 équipes en séries. Chaque joueur ne peut être choisi qu'une seule fois dans tout le pool.<br><br>
+      <strong style="color:var(--accent)">🛡️ 2 Défenseurs</strong><br>
+      Les défenseurs des équipes en séries. Aussi uniques au pool.<br><br>
+      <strong style="color:var(--accent)">🥅 1 Gardien de but</strong><br>
+      Un seul gardien par pooler. Unique au pool.<br><br>
+      <strong style="color:var(--accent)">🏟️ 1 Équipe</strong><br>
+      Une seule équipe par pooler pour accumuler des points sur ses victoires. Unique au pool.<br><br>
+      <strong style="color:var(--text)">L'ordre dans lequel tu draftes tes choix est libre</strong> — tu peux prendre ton gardien en premier ou tes attaquants d'abord, tant que tu respectes la composition finale de 6A-2D-1G-1É.
     </div>
   </div>
 
@@ -461,7 +472,7 @@ input::placeholder { color: var(--text2); }
       <strong style="color:var(--accent)">Comment faire ton choix</strong><br>
       1. Va dans l'onglet <strong style="color:var(--text)">Draft</strong>.<br>
       2. Connecte-toi avec ton nom et ton mot de passe.<br>
-      3. Quand c'est ton tour, choisis la catégorie (Joueur, Gardien ou Équipe).<br>
+      3. Quand c'est ton tour, choisis la catégorie (Attaquant, Défenseur, Gardien ou Équipe).<br>
       4. Utilise la barre de recherche pour trouver ton choix.<br>
       5. Clique sur le joueur/gardien/équipe désiré pour confirmer ta sélection.<br><br>
       <strong style="color:var(--accent)">Synchronisation en temps réel</strong><br>
@@ -915,10 +926,12 @@ function updateDataStatus() {
 // ============================================================
 function getPoolerPicks(poolerName) {
   const idx = DATA.poolers.findIndex(p => p.name === poolerName);
-  if (idx < 0) return { players: [], goalie: null, team: null };
+  if (idx < 0) return { players: [], forwards: [], defensemen: [], goalie: null, team: null };
   const picks = DATA.draft.picks.filter(p => p.poolerIdx === idx);
   return {
-    players: picks.filter(p => p.type === 'player').map(p => p.value),
+    players: picks.filter(p => p.type === 'player' || p.type === 'forward' || p.type === 'defenseman').map(p => p.value),
+    forwards: picks.filter(p => p.type === 'forward' || p.type === 'player').map(p => p.value),
+    defensemen: picks.filter(p => p.type === 'defenseman').map(p => p.value),
     goalie: picks.find(p => p.type === 'goalie')?.value || null,
     team: picks.find(p => p.type === 'team')?.value || null
   };
@@ -963,7 +976,9 @@ function calcPredictionPoints(poolerName) {
       const result = roundResults[i];
       if (!pred || !result || !result.winner) continue;
       if (norm(pred.winner) === norm(result.winner)) {
-        total += (pred.games == result.games) ? 3 : 1;
+        total += (pred.games == result.games) ? 5 : 3;
+      } else if (result.games == 7 && pred.games == 7) {
+        total += 1;
       }
     }
   }
@@ -1067,6 +1082,18 @@ function renderStandings() {
       <td style="text-align:right" class="pts-big">${r.total}</td>
     </tr>`;
   }).join('');
+
+  // Dynamic prize distribution
+  const numPoolers = DATA.poolers.length;
+  const pot = numPoolers * 25;
+  const distEl = document.getElementById('standings-distribution');
+  if (distEl) {
+    if (numPoolers >= 10) {
+      distEl.innerHTML = `Cagnotte: ${pot}$ — #1 total: ${Math.round(pot * 0.55)}$ (55%), #2 total: ${Math.round(pot * 0.15)}$ (15%), #1 prédictions: ${Math.round(pot * 0.15)}$ (15%), #1 points: ${Math.round(pot * 0.15)}$ (15%)`;
+    } else {
+      distEl.innerHTML = `Cagnotte: ${pot}$ — #1 total: ${Math.round(pot * 0.70)}$ (70%), #1 prédictions: ${Math.round(pot * 0.15)}$ (15%), #1 points: ${Math.round(pot * 0.15)}$ (15%)`;
+    }
+  }
 }
 
 // ============================================================
@@ -1139,10 +1166,46 @@ function undoLastPick() {
   toast('Dernier choix annulé');
 }
 
+// Draft composition limits
+const DRAFT_LIMITS = { forward: 6, defenseman: 2, goalie: 1, team: 1 };
+
+function getPoolerPickCounts(poolerIdx) {
+  const counts = { forward: 0, defenseman: 0, goalie: 0, team: 0 };
+  for (const pick of DATA.draft.picks) {
+    if (pick.poolerIdx === poolerIdx && counts.hasOwnProperty(pick.type)) {
+      counts[pick.type]++;
+    }
+    // Backward compat: old "player" type counts as forward
+    if (pick.poolerIdx === poolerIdx && pick.type === 'player') {
+      counts.forward++;
+    }
+  }
+  return counts;
+}
+
+function updateDraftComposition() {
+  const el = document.getElementById('draft-composition');
+  if (!el || !DATA.draft.started || DATA.draft.completed) { if (el) el.textContent = ''; return; }
+  const n = DATA.poolers.length;
+  const order = getDraftOrder(DATA.draft.currentRound, n);
+  const poolerIdx = order[DATA.draft.currentPick];
+  const counts = getPoolerPickCounts(poolerIdx);
+  el.innerHTML = `<span style="color:var(--text)">A:</span>${counts.forward}/6 <span style="color:var(--text)">D:</span>${counts.defenseman}/2 <span style="color:var(--text)">G:</span>${counts.goalie}/1 <span style="color:var(--text)">É:</span>${counts.team}/1`;
+}
+
 function makePick(value, type) {
   const n = DATA.poolers.length;
   const order = getDraftOrder(DATA.draft.currentRound, n);
   const poolerIdx = order[DATA.draft.currentPick];
+
+  // Enforce composition limits
+  const counts = getPoolerPickCounts(poolerIdx);
+  const limit = DRAFT_LIMITS[type];
+  if (limit !== undefined && counts[type] >= limit) {
+    const labels = { forward: 'attaquants', defenseman: 'défenseurs', goalie: 'gardien', team: 'équipe' };
+    toast(`❌ Limite atteinte pour les ${labels[type]}! (${counts[type]}/${limit})`);
+    return;
+  }
 
   DATA.draft.picks.push({
     round: DATA.draft.currentRound,
@@ -1178,15 +1241,32 @@ function onDraftSearch(query) {
   const q = query ? norm(query) : '';
   let items = [];
 
-  if (type === 'player') {
+  const FWD_POS = ['C', 'L', 'R', 'LW', 'RW'];
+  const DEF_POS = ['D'];
+
+  if (type === 'forward') {
     if (DATA.nhlData.skaters.length) {
+      const posFiltered = DATA.nhlData.skaters.filter(s => FWD_POS.includes(s.pos));
       const filtered = q
-        ? DATA.nhlData.skaters.filter(s => norm(s.name).includes(q) || norm(s.team).includes(q))
-        : DATA.nhlData.skaters;
+        ? posFiltered.filter(s => norm(s.name).includes(q) || norm(s.team).includes(q))
+        : posFiltered;
       const isReg = DATA.nhlData.skaters[0]?.regSeason;
       items = filtered.slice(0, 25).map(s => ({
         name: s.name,
-        detail: `${s.team} — ${s.points} pts${isReg ? ' (sais. rég.)' : ''}`,
+        detail: `${s.pos} — ${s.team} — ${s.points} pts${isReg ? ' (sais. rég.)' : ''}`,
+        taken: drafted.has(norm(s.name))
+      }));
+    }
+  } else if (type === 'defenseman') {
+    if (DATA.nhlData.skaters.length) {
+      const posFiltered = DATA.nhlData.skaters.filter(s => DEF_POS.includes(s.pos));
+      const filtered = q
+        ? posFiltered.filter(s => norm(s.name).includes(q) || norm(s.team).includes(q))
+        : posFiltered;
+      const isReg = DATA.nhlData.skaters[0]?.regSeason;
+      items = filtered.slice(0, 25).map(s => ({
+        name: s.name,
+        detail: `D — ${s.team} — ${s.points} pts${isReg ? ' (sais. rég.)' : ''}`,
         taken: drafted.has(norm(s.name))
       }));
     }
@@ -1313,11 +1393,13 @@ function renderDraft() {
       if (isCurrent) cls += ' current';
       if (pick?.type === 'goalie') cls += ' goalie';
       if (pick?.type === 'team') cls += ' team-pick';
+      if (pick?.type === 'defenseman') cls += ' defenseman';
       const label = pick ? pick.value : (isCurrent ? '⏳' : '');
-      const typeIcon = pick?.type === 'goalie' ? '🥅 ' : pick?.type === 'team' ? '🏒 ' : '';
+      const typeIcon = pick?.type === 'goalie' ? '🥅 ' : pick?.type === 'team' ? '🏟️ ' : pick?.type === 'defenseman' ? '🛡️ ' : pick?.type === 'forward' ? '🏒 ' : pick?.type === 'player' ? '🏒 ' : '';
       board.innerHTML += `<div class="${cls}" title="${pick?.type || ''}">${typeIcon}${label}</div>`;
     }
   }
+  updateDraftComposition();
 }
 
 // ============================================================
