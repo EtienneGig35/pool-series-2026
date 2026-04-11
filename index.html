@@ -1156,7 +1156,7 @@ function renderStandings() {
 // ============================================================
 // DRAFT
 // ============================================================
-let draftLoggedPooler = null;
+let draftLoggedPooler = sessionStorage.getItem('draftLoggedPooler') || null;
 
 function populateDraftSelect() {
   const sel = document.getElementById('draft-pooler-select');
@@ -1180,6 +1180,7 @@ function loginDraft() {
   }
   errEl.style.display = 'none';
   draftLoggedPooler = poolerName;
+  sessionStorage.setItem('draftLoggedPooler', poolerName);
   renderDraft();
   // Request notification permission
   if ('Notification' in window && Notification.permission === 'default') {
@@ -1189,6 +1190,7 @@ function loginDraft() {
 
 function logoutDraft() {
   draftLoggedPooler = null;
+  sessionStorage.removeItem('draftLoggedPooler');
   document.getElementById('draft-pw').value = '';
   renderDraft();
 }
@@ -1501,7 +1503,7 @@ function renderDraft() {
 // ============================================================
 // PREDICTIONS — Auth + Deadlines
 // ============================================================
-let loggedPooler = null;
+let loggedPooler = sessionStorage.getItem('loggedPooler') || null;
 
 const ROUND_LABELS = { 1: 'Ronde 1', 2: 'Ronde 2', 3: 'Finales de conférence', 4: 'Finale de la Coupe Stanley' };
 const ROUND_SERIES_COUNT = { 1: 8, 2: 4, 3: 2, 4: 1 };
@@ -1549,6 +1551,7 @@ function loginPredictions() {
   }
   errEl.style.display = 'none';
   loggedPooler = poolerName;
+  sessionStorage.setItem('loggedPooler', poolerName);
   document.getElementById('pred-login').style.display = 'none';
   document.getElementById('pred-content').style.display = '';
   document.getElementById('pred-logged-name').textContent = poolerName;
@@ -1557,6 +1560,7 @@ function loginPredictions() {
 
 function logoutPredictions() {
   loggedPooler = null;
+  sessionStorage.removeItem('loggedPooler');
   document.getElementById('pred-login').style.display = '';
   document.getElementById('pred-content').style.display = 'none';
   document.getElementById('pred-password').value = '';
@@ -1897,6 +1901,7 @@ function adminEditPredictions() {
   if (!poolerName) return;
   // Log into predictions as that pooler (admin override)
   loggedPooler = poolerName;
+  sessionStorage.setItem('loggedPooler', poolerName);
   // Switch to predictions tab
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
