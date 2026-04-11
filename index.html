@@ -656,8 +656,23 @@ try {
       return;
     }
     suppressFirebaseWrite = true;
-    DATA = { ...DEFAULT_DATA, ...remote, draft: { ...DEFAULT_DATA.draft, ...(remote.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(remote.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) }, passwords: { ...(remote.passwords||{}) } };
+    // Merge passwords: remote wins for conflicts, but keep local-only passwords
+    const localPasswords = DATA.passwords || {};
+    const remotePasswords = remote.passwords || {};
+    const mergedPasswords = { ...localPasswords, ...remotePasswords };
+    // Merge predictions: remote wins, but keep local-only pooler predictions
+    const localPreds = DATA.predictions || {};
+    const remotePreds = remote.predictions || {};
+    const mergedPreds = { ...localPreds, ...remotePreds };
+    DATA = { ...DEFAULT_DATA, ...remote, draft: { ...DEFAULT_DATA.draft, ...(remote.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(remote.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) }, passwords: mergedPasswords, predictions: mergedPreds };
     localStorage.setItem('pool2026', JSON.stringify(DATA));
+    // If local had data not yet in Firebase, push it up
+    const hasLocalOnly = Object.keys(localPasswords).some(k => !remotePasswords[k]) || Object.keys(localPreds).some(k => !remotePreds[k]);
+    if (hasLocalOnly) {
+      suppressFirebaseWrite = false;
+      saveData();
+      suppressFirebaseWrite = true;
+    }
     // Validate saved sessions against updated passwords
     if (typeof validateSavedSessions === 'function') validateSavedSessions();
     // Re-render active page
