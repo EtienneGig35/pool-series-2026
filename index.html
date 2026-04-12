@@ -1580,6 +1580,9 @@ function loginDraft() {
   errEl.style.display = 'none';
   draftLoggedPooler = poolerName;
   localStorage.setItem('draftLoggedPooler', poolerName);
+  // Sync: connecter aussi aux Prédictions
+  loggedPooler = poolerName;
+  localStorage.setItem('loggedPooler', poolerName);
   renderDraft();
   // Request notification permission
   if ('Notification' in window && Notification.permission === 'default') {
@@ -1599,6 +1602,9 @@ function loginDraft() {
 function logoutDraft() {
   draftLoggedPooler = null;
   localStorage.removeItem('draftLoggedPooler');
+  // Sync: déconnecter aussi des Prédictions
+  loggedPooler = null;
+  localStorage.removeItem('loggedPooler');
   document.getElementById('draft-pw').value = '';
   renderDraft();
 }
@@ -2087,6 +2093,15 @@ function loginPredictions() {
   errEl.style.display = 'none';
   loggedPooler = poolerName;
   localStorage.setItem('loggedPooler', poolerName);
+  // Sync: connecter aussi au Draft + activer notifications
+  draftLoggedPooler = poolerName;
+  localStorage.setItem('draftLoggedPooler', poolerName);
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().then(perm => {
+      updateNotificationStatus();
+      if (perm === 'granted') toast('✅ Notifications activées!');
+    });
+  }
   document.getElementById('pred-login').style.display = 'none';
   document.getElementById('pred-content').style.display = '';
   document.getElementById('pred-logged-name').textContent = poolerName;
@@ -2096,6 +2111,9 @@ function loginPredictions() {
 function logoutPredictions() {
   loggedPooler = null;
   localStorage.removeItem('loggedPooler');
+  // Sync: déconnecter aussi du Draft
+  draftLoggedPooler = null;
+  localStorage.removeItem('draftLoggedPooler');
   document.getElementById('pred-login').style.display = '';
   document.getElementById('pred-content').style.display = 'none';
   document.getElementById('pred-password').value = '';
@@ -2614,6 +2632,15 @@ function validateSavedSessions() {
 validateSavedSessions();
 
 renderStandings();
+// Sync login state between Draft and Predictions on startup
+if (draftLoggedPooler && !loggedPooler) {
+  loggedPooler = draftLoggedPooler;
+  localStorage.setItem('loggedPooler', draftLoggedPooler);
+} else if (loggedPooler && !draftLoggedPooler) {
+  draftLoggedPooler = loggedPooler;
+  localStorage.setItem('draftLoggedPooler', loggedPooler);
+}
+
 updateNotificationStatus();
 updateDataStatus();
 
