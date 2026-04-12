@@ -622,11 +622,73 @@ function loadData() {
   return JSON.parse(JSON.stringify(DEFAULT_DATA));
 }
 
+function getFirebaseData() {
+  const { nhlData, ...rest } = DATA;
+  return JSON.parse(JSON.stringify(rest));
+}
+
+// Write only specific paths to Firebase to avoid overwriting other users' data
+function fbWrite(path, value) {
+  if (!firebaseReady || suppressFirebaseWrite || !fbRef) return;
+  const ref = path ? fbRef.child(path) : fbRef;
+  console.log('📤 Firebase write:', path || 'root');
+  ref.set(JSON.parse(JSON.stringify(value))).then(() => {
+    console.log('✅ Firebase write success:', path || 'root');
+  }).catch(err => {
+    console.error('❌ Firebase write error:', path, err);
+    toast('⚠️ Erreur de synchronisation Firebase');
+  });
+}
+
+// Save to localStorage always; Firebase writes are done by specific functions
 function saveData() {
   localStorage.setItem('pool2026', JSON.stringify(DATA));
-  if (firebaseReady && !suppressFirebaseWrite && fbRef) {
-    fbRef.set(JSON.parse(JSON.stringify(DATA))).catch(err => console.warn('Firebase write error:', err));
+}
+
+// Specific save functions for each data type — avoids full overwrite conflicts
+function saveDraft() {
+  saveData();
+  fbWrite('draft', DATA.draft);
+}
+
+function savePasswords() {
+  saveData();
+  fbWrite('passwords', DATA.passwords);
+}
+
+function savePredictions(poolerName) {
+  saveData();
+  if (poolerName) {
+    fbWrite('predictions/' + poolerName, DATA.predictions[poolerName]);
+  } else {
+    fbWrite('predictions', DATA.predictions);
   }
+}
+
+function savePoolers() {
+  saveData();
+  fbWrite('poolers', DATA.poolers);
+}
+
+function saveResults() {
+  saveData();
+  fbWrite('results', DATA.results);
+  fbWrite('finaleResults', DATA.finaleResults);
+}
+
+function saveRounds() {
+  saveData();
+  fbWrite('rounds', DATA.rounds);
+}
+
+function saveDeadlines() {
+  saveData();
+  fbWrite('deadlines', DATA.deadlines);
+}
+
+function saveAll() {
+  saveData();
+  fbWrite(null, getFirebaseData());
 }
 
 // ============================================================
@@ -656,10 +718,12 @@ try {
   fbRef.on('value', snapshot => {
     const remote = snapshot.val();
     if (!remote) {
-      // First time: push local data to Firebase
-      fbRef.set(JSON.parse(JSON.stringify(DATA))).catch(err => console.warn('Firebase init write error:', err));
+      // First time: push local data to Firebase (without nhlData)
+      console.log('📤 Firebase: première écriture (pas de données distantes)');
+      saveAll();
       return;
     }
+    console.log('📥 Firebase: données reçues | draft picks:', remote.draft?.picks?.length || 0, '| passwords:', Object.keys(remote.passwords || {}).length);
     suppressFirebaseWrite = true;
     // Merge passwords: remote wins for conflicts, but keep local-only passwords
     const localPasswords = DATA.passwords || {};
@@ -669,13 +733,17 @@ try {
     const localPreds = DATA.predictions || {};
     const remotePreds = remote.predictions || {};
     const mergedPreds = { ...localPreds, ...remotePreds };
-    DATA = { ...DEFAULT_DATA, ...remote, draft: { ...DEFAULT_DATA.draft, ...(remote.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(remote.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) }, passwords: mergedPasswords, predictions: mergedPreds };
+    // Keep local nhlData (not synced via Firebase — too large, fetched from NHL API separately)
+    const localNhlData = DATA.nhlData || DEFAULT_DATA.nhlData;
+    DATA = { ...DEFAULT_DATA, ...remote, draft: { ...DEFAULT_DATA.draft, ...(remote.draft||{}) }, nhlData: localNhlData, deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) }, passwords: mergedPasswords, predictions: mergedPreds };
     localStorage.setItem('pool2026', JSON.stringify(DATA));
-    // If local had data not yet in Firebase, push it up
-    const hasLocalOnly = Object.keys(localPasswords).some(k => !remotePasswords[k]) || Object.keys(localPreds).some(k => !remotePreds[k]);
-    if (hasLocalOnly) {
+    // If local had data not yet in Firebase, push only those specific paths
+    const hasLocalPw = Object.keys(localPasswords).some(k => !remotePasswords[k]);
+    const hasLocalPreds = Object.keys(localPreds).some(k => !remotePreds[k]);
+    if (hasLocalPw || hasLocalPreds) {
       suppressFirebaseWrite = false;
-      saveData();
+      if (hasLocalPw) savePasswords();
+      if (hasLocalPreds) savePredictions();
       suppressFirebaseWrite = true;
     }
     // Validate saved sessions against updated passwords
@@ -976,7 +1044,9 @@ async function refreshAll() {
   // Auto-detect champion & finalist from round 4 result
   autoDetectFinaleResults();
 
-  saveData();
+  saveData(); // nhlData only in localStorage, rounds/results pushed to Firebase
+  saveRounds();
+  saveResults();
   updateDataStatus();
   renderStandings();
 
@@ -1309,7 +1379,7 @@ function startDraft() {
   DATA.draft.currentPick = 0;
   DATA.draft.picks = [];
   DATA.draft.completed = false;
-  saveData();
+  saveDraft();
   renderDraft();
   toast('🏒 Le draft est commencé!');
 }
@@ -1317,7 +1387,7 @@ function startDraft() {
 function resetDraft() {
   if (!confirm('Êtes-vous sûr de vouloir réinitialiser le draft?')) return;
   DATA.draft = { started: false, completed: false, picks: [], currentRound: 1, currentPick: 0, totalRounds: 10 };
-  saveData();
+  saveDraft();
   renderDraft();
   toast('Draft réinitialisé');
 }
@@ -1331,7 +1401,7 @@ function undoLastPick() {
   DATA.draft.currentRound = Math.floor(totalPicks / n) + 1;
   DATA.draft.currentPick = totalPicks % n;
   DATA.draft.completed = false;
-  saveData();
+  saveDraft();
   renderDraft();
   toast('Dernier choix annulé');
 }
@@ -1400,7 +1470,7 @@ function makePick(value, type) {
     }
   }
 
-  saveData();
+  saveDraft();
   renderDraft();
   document.getElementById('draft-search').value = '';
   document.getElementById('draft-results').classList.remove('show');
@@ -1620,7 +1690,7 @@ function createPassword() {
   if (!poolerName || !pw) return toast('Choisissez un pooler et un mot de passe');
   if (DATA.passwords[poolerName]) return toast('Ce pooler a déjà un mot de passe');
   DATA.passwords[poolerName] = pw;
-  saveData();
+  savePasswords();
   document.getElementById('pred-new-password').value = '';
   toast(`✅ Mot de passe créé pour ${poolerName}`);
 }
@@ -1778,7 +1848,7 @@ function savePredictions() {
   }
 
   DATA.predictions[loggedPooler] = preds;
-  saveData();
+  savePredictions(loggedPooler);
   toast(`✅ Prédictions de ${loggedPooler} sauvegardées!`);
 }
 
@@ -2018,7 +2088,7 @@ function resetPoolerPassword(idx) {
   const name = DATA.poolers[idx].name;
   if (!confirm(`Réinitialiser le mot de passe de ${name}? Il/elle devra en créer un nouveau.`)) return;
   delete DATA.passwords[name];
-  saveData();
+  savePasswords();
   renderConfigContent();
   toast(`Mot de passe de ${name} réinitialisé`);
 }
@@ -2040,8 +2110,8 @@ function renderConfigContent() {
   const tbody = document.getElementById('config-poolers');
   tbody.innerHTML = DATA.poolers.map((p, i) =>
     `<tr>
-      <td><input type="text" value="${p.name}" onchange="DATA.poolers[${i}].name=this.value;saveData()" style="width:150px">${p.name===DATA.adminPooler?' <span class="badge badge-blue">Admin</span>':''}</td>
-      <td><input type="checkbox" ${p.paid?'checked':''} onchange="DATA.poolers[${i}].paid=this.checked;saveData()"></td>
+      <td><input type="text" value="${p.name}" onchange="DATA.poolers[${i}].name=this.value;savePoolers()" style="width:150px">${p.name===DATA.adminPooler?' <span class="badge badge-blue">Admin</span>':''}</td>
+      <td><input type="checkbox" ${p.paid?'checked':''} onchange="DATA.poolers[${i}].paid=this.checked;savePoolers()"></td>
       <td>${DATA.passwords[p.name] ? '<span class="badge badge-green">Actif</span>' : '<span class="badge deadline-tbd">Aucun</span>'}</td>
       <td style="display:flex;gap:4px">
         ${DATA.passwords[p.name] ? `<button class="btn btn-sm" onclick="resetPoolerPassword(${i})" title="Réinitialiser mdp">🔑</button>` : ''}
@@ -2103,7 +2173,7 @@ function addPooler() {
   const name = prompt('Nom du pooler:');
   if (!name) return;
   DATA.poolers.push({ name, paid: false });
-  saveData();
+  savePoolers();
   renderConfig();
   toast(`${name} ajouté!`);
 }
@@ -2111,13 +2181,13 @@ function addPooler() {
 function removePooler(idx) {
   if (!confirm(`Retirer ${DATA.poolers[idx].name}?`)) return;
   DATA.poolers.splice(idx, 1);
-  saveData();
+  savePoolers();
   renderConfig();
 }
 
 function saveFinaleResults() {
   DATA.finaleResults.connSmythe = document.getElementById('res-connsmythe').value;
-  saveData();
+  saveResults();
   renderStandings();
 }
 
@@ -2142,7 +2212,7 @@ function importData(event) {
   reader.onload = e => {
     try {
       DATA = JSON.parse(e.target.result);
-      saveData();
+      saveAll();
       location.reload();
     } catch(err) {
       toast('❌ Fichier invalide');
