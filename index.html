@@ -1042,7 +1042,10 @@ if (window._fbAppFailed || window._fbDbFailed) {
           dbg('❌ Render error: ' + renderErr.message);
         }
         // Always check notifications regardless of active tab
+        try { notifyDraftOrder(); } catch(e) { dbg('❌ notifyDraftOrder error: ' + e.message); }
         try { notifyMyTurn(); } catch(e) { dbg('❌ notifyMyTurn error: ' + e.message); }
+        try { checkPredictionReminders(); } catch(e) { dbg('❌ checkPredictionReminders error: ' + e.message); }
+        try { checkRoundEndNotifications(); } catch(e) { dbg('❌ checkRoundEndNotifications error: ' + e.message); }
         try { updateNotificationStatus(); } catch(e) {}
       } catch(listenerErr) {
         dbg('❌ LISTENER CRASH: ' + listenerErr.message + ' | ' + listenerErr.stack);
@@ -1697,6 +1700,123 @@ function notifyMyTurn() {
   }
 }
 
+// --- Notification: Draft order assigned ---
+let _draftOrderNotified = localStorage.getItem('draftOrderNotified') || '';
+function notifyDraftOrder() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!draftLoggedPooler || !DATA.draft.started) return;
+  // Only notify once per pooler per draft session
+  const key = draftLoggedPooler + '_' + DATA.poolers.map(p=>p.name).join(',');
+  if (_draftOrderNotified === key) return;
+  const idx = DATA.poolers.findIndex(p => p.name === draftLoggedPooler);
+  if (idx < 0) return;
+  const position = idx + 1;
+  const suffix = position === 1 ? 'er' : 'e';
+  const orderList = DATA.poolers.map((p, i) => `${i+1}. ${p.name}`).join('\n');
+  sendSWNotification(
+    '🎲 Ordre de draft déterminé!',
+    'Tu es ' + position + suffix + ' au repêchage!\n\n' + orderList,
+    'draft-order'
+  );
+  _draftOrderNotified = key;
+  localStorage.setItem('draftOrderNotified', key);
+  dbg('🔔 Notif ordre de draft envoyée: ' + draftLoggedPooler + ' = ' + position + suffix);
+}
+
+// --- Notification: Prediction deadline reminder (12h before) ---
+let _predRemindersSent = JSON.parse(localStorage.getItem('predRemindersSent') || '{}');
+function checkPredictionReminders() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const loggedName = draftLoggedPooler || loggedPooler;
+  if (!loggedName) return;
+  const now = Date.now();
+  const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+  const deadlineKeys = ['finale', '1', '2', '3', '4'];
+  const deadlineLabels = { finale: 'la Finale', '1': 'la Ronde 1', '2': 'la Ronde 2', '3': 'la Ronde 3', '4': 'la Ronde 4' };
+
+  for (const key of deadlineKeys) {
+    const dl = DATA.deadlines[key];
+    if (!dl) continue;
+    const dlTime = new Date(dl).getTime();
+    if (isNaN(dlTime)) continue;
+    const timeLeft = dlTime - now;
+    // Only remind if within 12h window AND deadline not passed
+    if (timeLeft <= 0 || timeLeft > TWELVE_HOURS) continue;
+    // Already reminded for this deadline?
+    const reminderKey = loggedName + '_' + key;
+    if (_predRemindersSent[reminderKey]) continue;
+    // Check if predictions are missing
+    const preds = DATA.predictions[loggedName] || {};
+    let missing = false;
+    if (key === 'finale') {
+      missing = !preds.champion || !preds.finalist || !preds.connSmythe;
+    } else {
+      const roundPreds = (preds.rounds && preds.rounds[key]) || [];
+      const series = DATA.rounds[key] || [];
+      if (series.length === 0) continue; // No series defined yet
+      missing = roundPreds.length < series.length || roundPreds.some(rp => !rp.winner || !rp.games);
+    }
+    if (!missing) continue;
+    // Send reminder
+    const hoursLeft = Math.round(timeLeft / (60 * 60 * 1000));
+    sendSWNotification(
+      '⏰ Rappel prédictions — ' + deadlineLabels[key],
+      loggedName + ', il te reste ~' + hoursLeft + 'h pour soumettre tes prédictions pour ' + deadlineLabels[key] + '! Va dans l\'onglet Prédictions.',
+      'pred-reminder-' + key
+    );
+    _predRemindersSent[reminderKey] = Date.now();
+    localStorage.setItem('predRemindersSent', JSON.stringify(_predRemindersSent));
+    dbg('🔔 Rappel prédictions envoyé: ' + deadlineLabels[key] + ' pour ' + loggedName);
+  }
+}
+
+// --- Notification: End of round standings ---
+let _roundEndNotifsSent = JSON.parse(localStorage.getItem('roundEndNotifsSent') || '{}');
+function checkRoundEndNotifications() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const loggedName = draftLoggedPooler || loggedPooler;
+  if (!loggedName) return;
+
+  for (const rn of ['1', '2', '3', '4']) {
+    const reminderKey = loggedName + '_round' + rn;
+    if (_roundEndNotifsSent[reminderKey]) continue;
+    const series = DATA.rounds[rn] || [];
+    const results = DATA.results[rn] || [];
+    if (series.length === 0) continue;
+    // Check if all series in this round have results
+    const allComplete = series.length > 0 && results.length >= series.length && results.every(r => r.winner && r.games);
+    if (!allComplete) continue;
+    // Calculate standings
+    const rows = DATA.poolers.map(p => {
+      const playerPts = calcPlayerPoints(p.name);
+      const goaliePts = calcGoaliePoints(p.name);
+      const teamPts = calcTeamPoints(p.name);
+      const predPts = calcPredictionPoints(p.name);
+      const bonusPts = calcFinaleBonus(p.name);
+      const total = playerPts + goaliePts + teamPts + predPts + bonusPts;
+      return { name: p.name, total };
+    });
+    rows.sort((a, b) => b.total - a.total);
+    const top1 = rows[0];
+    const top2 = rows[1];
+    const myRow = rows.find(r => r.name === loggedName);
+    const myRank = rows.findIndex(r => r.name === loggedName) + 1;
+    const roundLabel = rn === '4' ? 'la Finale' : 'la Ronde ' + rn;
+    let message = 'Classement après ' + roundLabel + ':\n';
+    message += '🥇 ' + top1.name + ' — ' + top1.total + ' pts\n';
+    message += '🥈 ' + top2.name + ' — ' + top2.total + ' pts\n\n';
+    if (myRank <= 2) {
+      message += 'Bravo ' + loggedName + '! Tu es ' + myRank + (myRank===1?'er':'e') + ' avec ' + myRow.total + ' pts. Continue comme ça! 🔥';
+    } else {
+      message += loggedName + ', tu es ' + myRank + 'e avec ' + myRow.total + ' pts. Tout peut encore changer, lâche pas! 💪';
+    }
+    sendSWNotification('🏆 Ronde ' + rn + ' terminée!', message, 'round-end-' + rn);
+    _roundEndNotifsSent[reminderKey] = Date.now();
+    localStorage.setItem('roundEndNotifsSent', JSON.stringify(_roundEndNotifsSent));
+    dbg('🔔 Notif fin de ronde ' + rn + ' envoyée à ' + loggedName);
+  }
+}
+
 function updateNotificationStatus() {
   const el = document.getElementById('notif-status');
   if (!el) return;
@@ -1774,6 +1894,8 @@ function startDraft() {
   saveDraft();
   renderDraft();
   toast('🏒 Le draft est commencé! Ordre: ' + orderNames);
+  // Notify logged-in pooler of their draft position
+  notifyDraftOrder();
 }
 
 function resetDraft() {
@@ -2673,6 +2795,11 @@ updateDataStatus();
 
 // Auto-refresh NHL data on page load (silently, shows toast only on success)
 refreshAll();
+
+// Periodic check for prediction deadline reminders (every 15 min)
+setInterval(() => {
+  try { checkPredictionReminders(); } catch(e) {}
+}, 15 * 60 * 1000);
 
 // ============================================================
 // PWA INSTALL BANNER
