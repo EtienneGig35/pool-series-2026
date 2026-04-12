@@ -2724,8 +2724,10 @@ function renderConfigContent() {
 }
 
 function addPooler() {
+  if (DATA.draft.started) return toast('❌ Impossible d\'ajouter un pooler pendant le draft');
   const name = prompt('Nom du pooler:');
   if (!name) return;
+  if (DATA.poolers.some(p => norm(p.name) === norm(name))) return toast('❌ Ce pooler existe déjà');
   DATA.poolers.push({ name, paid: false });
   savePoolers();
   renderConfig();
@@ -2733,6 +2735,7 @@ function addPooler() {
 }
 
 function removePooler(idx) {
+  if (DATA.draft.started) return toast('❌ Impossible de retirer un pooler pendant le draft');
   if (!confirm(`Retirer ${DATA.poolers[idx].name}?`)) return;
   DATA.poolers.splice(idx, 1);
   savePoolers();
