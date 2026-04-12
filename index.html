@@ -177,6 +177,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-tab" data-page="poolers">Détails Poolers</div>
   <div class="nav-tab" data-page="config">Config</div>
   <div class="nav-right">
+    <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
   </div>
 </nav>
@@ -684,11 +685,14 @@ try {
     if (activePage) {
       const id = activePage.id.replace('page-', '');
       if (id === 'standings') renderStandings();
-      if (id === 'draft') { renderDraft(); notifyMyTurn(); }
+      if (id === 'draft') renderDraft();
       if (id === 'predictions') renderPredictions();
       if (id === 'poolers') renderPoolerDetail();
       if (id === 'config') renderConfig();
     }
+    // Always check notifications regardless of active tab
+    notifyMyTurn();
+    updateNotificationStatus();
     suppressFirebaseWrite = false;
   });
 } catch(e) {
@@ -1216,14 +1220,79 @@ function logoutDraft() {
   renderDraft();
 }
 
+// Track last notified state to avoid duplicate notifications
+let lastNotifiedRound = null;
+let lastNotifiedPick = null;
+
 function notifyMyTurn() {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!draftLoggedPooler) return;
   if (!DATA.draft.started || DATA.draft.completed) return;
   const n = DATA.poolers.length;
   const order = getDraftOrder(DATA.draft.currentRound, n);
   const currentPooler = DATA.poolers[order[DATA.draft.currentPick]]?.name;
-  if (currentPooler === draftLoggedPooler) {
-    new Notification('🏒 Pool Séries 2026', { body: `C'est ton tour de drafter, ${draftLoggedPooler}!`, icon: '🏒' });
+  // Only notify once per turn change
+  if (currentPooler === draftLoggedPooler &&
+      (lastNotifiedRound !== DATA.draft.currentRound || lastNotifiedPick !== DATA.draft.currentPick)) {
+    lastNotifiedRound = DATA.draft.currentRound;
+    lastNotifiedPick = DATA.draft.currentPick;
+    new Notification('🏒 Pool Séries 2026', {
+      body: `C'est ton tour de drafter, ${draftLoggedPooler}! (Ronde ${DATA.draft.currentRound})`,
+      tag: 'draft-turn', // Prevents duplicate notifications
+      renotify: true
+    });
+  }
+}
+
+function updateNotificationStatus() {
+  const el = document.getElementById('notif-status');
+  if (!el) return;
+  if (!('Notification' in window)) {
+    el.textContent = '🔕';
+    el.title = 'Notifications non supportées par ce navigateur';
+    el.style.background = 'rgba(239,83,80,.15)';
+  } else if (Notification.permission === 'granted') {
+    el.textContent = '🔔';
+    el.title = 'Notifications activées — cliquer pour tester';
+    el.style.background = 'rgba(76,175,80,.15)';
+  } else if (Notification.permission === 'denied') {
+    el.textContent = '🔕';
+    el.title = 'Notifications bloquées — activez-les dans les paramètres du navigateur';
+    el.style.background = 'rgba(239,83,80,.15)';
+  } else {
+    el.textContent = '🔔';
+    el.title = 'Cliquer pour activer les notifications';
+    el.style.background = 'rgba(255,152,0,.15)';
+  }
+}
+
+function toggleNotifications() {
+  if (!('Notification' in window)) {
+    toast('❌ Les notifications ne sont pas supportées par ce navigateur');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    // Send a test notification
+    new Notification('🏒 Pool Séries 2026', {
+      body: 'Les notifications fonctionnent! Tu seras alerté quand ce sera ton tour.',
+      tag: 'test'
+    });
+    toast('✅ Notification test envoyée!');
+  } else if (Notification.permission === 'denied') {
+    toast('⚠️ Notifications bloquées. Va dans Paramètres du navigateur → Notifications pour les réactiver.');
+  } else {
+    Notification.requestPermission().then(perm => {
+      updateNotificationStatus();
+      if (perm === 'granted') {
+        new Notification('🏒 Pool Séries 2026', {
+          body: 'Notifications activées! Tu seras alerté quand ce sera ton tour.',
+          tag: 'test'
+        });
+        toast('✅ Notifications activées!');
+      } else {
+        toast('❌ Notifications refusées');
+      }
+    });
   }
 }
 
@@ -2100,6 +2169,7 @@ function validateSavedSessions() {
 validateSavedSessions();
 
 renderStandings();
+updateNotificationStatus();
 updateDataStatus();
 
 // Auto-refresh NHL data on page load (silently, shows toast only on success)
