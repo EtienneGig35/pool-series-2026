@@ -192,6 +192,10 @@ input::placeholder { color: var(--text2); }
   <div class="status-bar" id="firebase-status" style="margin-top:4px">
     <span id="fb-status-text">🔄 Firebase: chargement SDK...</span>
   </div>
+  <details style="margin:8px 0;background:var(--surface2);border-radius:8px;padding:4px 12px;font-size:12px">
+    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Journal Firebase (debug)</summary>
+    <pre id="debug-log" style="white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;margin:4px 0;color:var(--text2);font-family:monospace;font-size:11px">Aucun événement encore...</pre>
+  </details>
   <div class="card" style="overflow-x:auto">
     <table>
       <thead>
@@ -619,9 +623,12 @@ function loadData() {
     const saved = localStorage.getItem('pool2026');
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...DEFAULT_DATA, ...parsed, draft: { ...DEFAULT_DATA.draft, ...(parsed.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(parsed.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(parsed.deadlines||{}) }, passwords: { ...(parsed.passwords||{}) } };
+      const result = { ...DEFAULT_DATA, ...parsed, draft: { ...DEFAULT_DATA.draft, ...(parsed.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(parsed.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(parsed.deadlines||{}) }, passwords: { ...(parsed.passwords||{}) } };
+      console.log('🏗️ loadData from localStorage: draft.started=' + result.draft.started + ' picks=' + (result.draft.picks?.length||0) + ' pw=' + Object.keys(result.passwords).length);
+      return result;
     }
-  } catch(e) {}
+    console.log('🏗️ loadData: no localStorage found, using defaults');
+  } catch(e) { console.error('🏗️ loadData error:', e); }
   return JSON.parse(JSON.stringify(DEFAULT_DATA));
 }
 
@@ -630,26 +637,47 @@ function getFirebaseData() {
   return JSON.parse(JSON.stringify(rest));
 }
 
+// ============================================================
+// VISIBLE DEBUG LOG (shows Firebase activity on the page)
+// ============================================================
+const _debugLog = [];
+function dbg(msg) {
+  const ts = new Date().toLocaleTimeString('fr-CA');
+  const entry = `[${ts}] ${msg}`;
+  _debugLog.push(entry);
+  if (_debugLog.length > 30) _debugLog.shift();
+  console.log('🔍 ' + msg);
+  const el = document.getElementById('debug-log');
+  if (el) el.textContent = _debugLog.join('\n');
+}
+
 // Write only specific paths to Firebase to avoid overwriting other users' data
 function fbWrite(path, value) {
-  if (!firebaseReady || suppressFirebaseWrite || !fbRef) return;
+  if (!firebaseReady) { dbg('⛔ fbWrite BLOQUÉ: firebaseReady=false (path=' + (path||'root') + ')'); return; }
+  if (suppressFirebaseWrite) { dbg('⛔ fbWrite BLOQUÉ: suppressFirebaseWrite=true (path=' + (path||'root') + ')'); return; }
+  if (!fbRef) { dbg('⛔ fbWrite BLOQUÉ: fbRef=null (path=' + (path||'root') + ')'); return; }
   const ref = path ? fbRef.child(path) : fbRef;
-  console.log('📤 Firebase write:', path || 'root');
+  const summary = path === 'draft' ? `picks=${value?.picks?.length||0} started=${value?.started}` :
+                  path === 'passwords' ? `keys=${Object.keys(value||{}).length}` :
+                  path === null ? `FULL WRITE (keys=${Object.keys(value||{}).length})` : '';
+  dbg(`📤 WRITE → ${path||'root'} ${summary}`);
   ref.set(JSON.parse(JSON.stringify(value))).then(() => {
-    console.log('✅ Firebase write success:', path || 'root');
+    dbg(`✅ WRITE OK → ${path||'root'}`);
   }).catch(err => {
-    console.error('❌ Firebase write error:', path, err);
-    toast('⚠️ Erreur de synchronisation Firebase');
+    dbg(`❌ WRITE FAIL → ${path||'root'}: ${err.code} ${err.message}`);
+    toast('⚠️ Erreur Firebase: ' + (err.code || err.message));
   });
 }
 
 // Save to localStorage always; Firebase writes are done by specific functions
 function saveData() {
   localStorage.setItem('pool2026', JSON.stringify(DATA));
+  dbg(`💾 localStorage saved (picks=${DATA.draft?.picks?.length||0} started=${DATA.draft?.started} pw=${Object.keys(DATA.passwords||{}).length})`);
 }
 
 // Specific save functions for each data type — avoids full overwrite conflicts
 function saveDraft() {
+  dbg(`📝 saveDraft() called — picks=${DATA.draft.picks.length} started=${DATA.draft.started} round=${DATA.draft.currentRound} pick=${DATA.draft.currentPick}`);
   saveData();
   fbWrite('draft', DATA.draft);
 }
@@ -690,6 +718,14 @@ function saveDeadlines() {
 }
 
 function saveAll() {
+  // SAFETY: Don't overwrite Firebase with empty default data
+  const hasData = DATA.draft.picks.length > 0 || Object.keys(DATA.passwords).length > 0 || Object.keys(DATA.predictions).length > 0;
+  if (!hasData) {
+    dbg('⚠️ saveAll() SKIPPED — local data is empty/default, refusing to overwrite Firebase');
+    saveData(); // still save to localStorage
+    return;
+  }
+  dbg(`📤 saveAll() — pushing full data (picks=${DATA.draft.picks.length})`);
   saveData();
   fbWrite(null, getFirebaseData());
 }
@@ -777,41 +813,55 @@ if (window._fbAppFailed || window._fbDbFailed) {
     db.ref('.info/connected').on('value', snap => {
       if (snap.val() === true) {
         updateFbStatus('✅', 'connecté en temps réel', 'var(--green)');
-        console.log('🟢 Firebase: connected to server');
+        dbg('🟢 Connecté au serveur Firebase');
       } else {
         updateFbStatus('🔴', 'déconnecté du serveur', 'var(--red)');
-        console.log('🔴 Firebase: disconnected from server');
+        dbg('🔴 Déconnecté du serveur Firebase');
       }
     });
 
     // Step 3: Test write/read to confirm permissions work
     const testRef = db.ref('_connectionTest');
     const testVal = Date.now();
+    dbg('🧪 Test write/read en cours...');
     testRef.set(testVal).then(() => {
-      console.log('✅ Firebase test write succeeded');
+      dbg('🧪 Test write OK');
       return testRef.once('value');
     }).then(snap => {
       if (snap.val() === testVal) {
-        console.log('✅ Firebase test read succeeded — sync is working');
+        dbg('🧪 Test read OK — Firebase 100% fonctionnel');
         updateFbStatus('✅', 'connecté et fonctionnel ✓', 'var(--green)');
       } else {
-        console.warn('⚠️ Firebase test read returned different value:', snap.val());
+        dbg('🧪 Test read INCOHÉRENT: attendu ' + testVal + ', reçu ' + snap.val());
         updateFbStatus('⚠️', 'lecture incohérente', 'orange');
       }
       testRef.remove();
     }).catch(err => {
-      console.error('❌ Firebase test write/read FAILED:', err.code, err.message);
+      dbg('🧪 Test ÉCHOUÉ: ' + err.code + ' ' + err.message);
       updateFbStatus('❌', 'erreur: ' + (err.code || err.message), 'var(--red)');
       toast('❌ Firebase: ' + (err.code === 'PERMISSION_DENIED' ? 'accès refusé — vérifier les rules' : err.message));
     });
 
-    // Step 4: Real-time listener for pool data
+    // Step 4: Also do a direct read of poolData to verify data exists
+    fbRef.once('value').then(snap => {
+      const val = snap.val();
+      if (val) {
+        const draftInfo = val.draft || {};
+        const picks = draftInfo.picks ? Object.keys(draftInfo.picks).length : 0;
+        dbg(`🔍 Direct read poolData: draft.started=${draftInfo.started} picks=${picks} passwords=${Object.keys(val.passwords||{}).length}`);
+      } else {
+        dbg('🔍 Direct read poolData: NULL (aucune donnée dans Firebase)');
+      }
+    });
+
+    // Step 5: Real-time listener for pool data
+    dbg('👂 Attaching listener on poolData...');
     fbRef.on('value', snapshot => {
       const remote = snapshot.val();
-      console.log('📥 Firebase value event — remote is', remote ? 'present' : 'null/empty');
+      dbg(`📥 LISTENER FIRED — remote=${remote ? 'PRESENT' : 'NULL'}`);
       if (!remote) {
-        console.log('📤 Firebase: première écriture (pas de données distantes)');
-        saveAll();
+        dbg('📥 Remote is NULL — checking if local has meaningful data before pushing...');
+        saveAll(); // saveAll() now has safety check against pushing empty data
         return;
       }
       // Fix Firebase objects that should be arrays
@@ -820,7 +870,8 @@ if (window._fbAppFailed || window._fbDbFailed) {
       remoteDraft.picks = fbToArray(remoteDraft.picks);
       const remotePoolers = fbToArray(remote.poolers);
 
-      console.log('📥 Firebase data | draft started:', remoteDraft.started, '| picks:', remoteDraft.picks?.length || 0, '| poolers:', remotePoolers.length, '| passwords:', Object.keys(remote.passwords || {}).length);
+      dbg(`📥 Remote data: draft.started=${remoteDraft.started} picks=${remoteDraft.picks?.length||0} poolers=${remotePoolers.length} pw=${Object.keys(remote.passwords||{}).length}`);
+
       suppressFirebaseWrite = true;
       // Merge passwords: remote wins for conflicts, but keep local-only passwords
       const localPasswords = DATA.passwords || {};
@@ -850,14 +901,15 @@ if (window._fbAppFailed || window._fbDbFailed) {
         passwords: mergedPasswords,
         predictions: mergedPreds
       };
+      dbg(`✅ DATA merged: draft.started=${DATA.draft.started} picks=${DATA.draft.picks.length} pw=${Object.keys(DATA.passwords).length}`);
       localStorage.setItem('pool2026', JSON.stringify(DATA));
       // If local had data not yet in Firebase, push only those specific paths
       const hasLocalPw = Object.keys(localPasswords).some(k => !remotePasswords[k]);
       const hasLocalPreds = Object.keys(localPreds).some(k => !remotePreds[k]);
       if (hasLocalPw || hasLocalPreds) {
         suppressFirebaseWrite = false;
-        if (hasLocalPw) savePasswords();
-        if (hasLocalPreds) savePredictions();
+        if (hasLocalPw) { dbg('📤 Pushing local-only passwords to Firebase'); savePasswords(); }
+        if (hasLocalPreds) { dbg('📤 Pushing local-only predictions to Firebase'); savePredictions(); }
         suppressFirebaseWrite = true;
       }
       // Validate saved sessions against updated passwords
@@ -866,6 +918,7 @@ if (window._fbAppFailed || window._fbDbFailed) {
       const activePage = document.querySelector('.page.active');
       if (activePage) {
         const id = activePage.id.replace('page-', '');
+        dbg(`🎨 Re-rendering page: ${id}`);
         if (id === 'standings') renderStandings();
         if (id === 'draft') renderDraft();
         if (id === 'predictions') renderPredictions();
@@ -878,7 +931,7 @@ if (window._fbAppFailed || window._fbDbFailed) {
       suppressFirebaseWrite = false;
     }, err => {
       // This second callback catches listener errors (permission denied, etc.)
-      console.error('❌ Firebase listener error:', err.code, err.message);
+      dbg(`❌ LISTENER ERROR: ${err.code} ${err.message}`);
       updateFbStatus('❌', 'listener erreur: ' + (err.code || err.message), 'var(--red)');
       toast('❌ Firebase listener: ' + err.message);
     });
@@ -1608,6 +1661,7 @@ function makePick(value, type) {
     }
   }
 
+  dbg(`🏒 makePick: ${value} (${type}) for pooler ${poolerIdx} → total picks=${DATA.draft.picks.length} round=${DATA.draft.currentRound} pick=${DATA.draft.currentPick}`);
   saveDraft();
   renderDraft();
   document.getElementById('draft-search').value = '';
