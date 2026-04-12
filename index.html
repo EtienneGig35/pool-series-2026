@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Pool des séries 2026 — Ligue du Mal</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏒</text></svg>">
 <style>
@@ -179,6 +182,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
+    <span style="font-size:10px;color:var(--text2);opacity:.6" title="Version du code">v12</span>
   </div>
 </nav>
 
@@ -268,6 +272,16 @@ input::placeholder { color: var(--text2); }
   <div class="card" style="overflow-x:auto">
     <div id="draft-board"></div>
   </div>
+
+  <details open style="margin:8px 0;background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:12px">
+    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Debug Draft (v12)</summary>
+    <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="testFirebaseWriteDraft()" style="font-size:11px">🧪 Test écriture Firebase</button>
+      <button class="btn btn-sm" onclick="readFirebaseDraft()" style="font-size:11px">🔍 Lire Firebase directement</button>
+      <span id="draft-debug-state" style="font-size:11px;color:var(--text2)"></span>
+    </div>
+    <pre id="draft-debug-log" style="white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;margin:4px 0;color:var(--text2);font-family:monospace;font-size:11px">En attente d'actions...</pre>
+  </details>
 </div>
 
 <!-- ======================== PRÉDICTIONS ======================== -->
@@ -641,14 +655,66 @@ function getFirebaseData() {
 // VISIBLE DEBUG LOG (shows Firebase activity on the page)
 // ============================================================
 const _debugLog = [];
+const _draftDebugLog = [];
 function dbg(msg) {
   const ts = new Date().toLocaleTimeString('fr-CA');
   const entry = `[${ts}] ${msg}`;
   _debugLog.push(entry);
   if (_debugLog.length > 30) _debugLog.shift();
+  _draftDebugLog.push(entry);
+  if (_draftDebugLog.length > 30) _draftDebugLog.shift();
   console.log('🔍 ' + msg);
   const el = document.getElementById('debug-log');
   if (el) el.textContent = _debugLog.join('\n');
+  const el2 = document.getElementById('draft-debug-log');
+  if (el2) el2.textContent = _draftDebugLog.join('\n');
+}
+
+// Test Firebase write directly from draft page
+function testFirebaseWriteDraft() {
+  dbg('🧪 TEST: Attempting direct Firebase write...');
+  if (!fbRef) { dbg('🧪 TEST FAIL: fbRef is null'); return; }
+  if (!firebaseReady) { dbg('🧪 TEST FAIL: firebaseReady is false'); return; }
+  dbg('🧪 TEST: suppressFirebaseWrite=' + suppressFirebaseWrite + ' firebaseReady=' + firebaseReady);
+  const testData = { _test: Date.now() };
+  fbRef.child('_draftTest').set(testData).then(() => {
+    dbg('🧪 TEST SUCCESS: Firebase write worked!');
+    fbRef.child('_draftTest').remove();
+    // Now try writing actual draft data
+    dbg('🧪 TEST: Now writing DATA.draft to Firebase...');
+    dbg('🧪 TEST: DATA.draft = started:' + DATA.draft.started + ' picks:' + DATA.draft.picks.length + ' round:' + DATA.draft.currentRound);
+    fbRef.child('draft').set(JSON.parse(JSON.stringify(DATA.draft))).then(() => {
+      dbg('🧪 TEST SUCCESS: Draft data written to Firebase!');
+    }).catch(err => {
+      dbg('🧪 TEST FAIL: Draft write error: ' + err.code + ' ' + err.message);
+    });
+  }).catch(err => {
+    dbg('🧪 TEST FAIL: ' + err.code + ' ' + err.message);
+  });
+}
+
+function readFirebaseDraft() {
+  dbg('🔍 READ: Fetching draft from Firebase...');
+  if (!fbRef) { dbg('🔍 READ FAIL: fbRef is null'); return; }
+  fbRef.child('draft').once('value').then(snap => {
+    const val = snap.val();
+    if (val) {
+      const picks = val.picks ? (Array.isArray(val.picks) ? val.picks.length : Object.keys(val.picks).length) : 0;
+      dbg('🔍 READ OK: started=' + val.started + ' picks=' + picks + ' round=' + val.currentRound + ' pick=' + val.currentPick);
+    } else {
+      dbg('🔍 READ: draft node is NULL in Firebase');
+    }
+  }).catch(err => {
+    dbg('🔍 READ FAIL: ' + err.code + ' ' + err.message);
+  });
+}
+
+// Update draft debug state indicator
+function updateDraftDebugState() {
+  const el = document.getElementById('draft-debug-state');
+  if (el) {
+    el.textContent = `[État: fbReady=${firebaseReady} suppress=${suppressFirebaseWrite} fbRef=${!!fbRef} picks=${DATA.draft.picks.length} started=${DATA.draft.started}]`;
+  }
 }
 
 // Write only specific paths to Firebase to avoid overwriting other users' data
@@ -1564,12 +1630,14 @@ function getDraftOrder(round, numPoolers) {
 }
 
 function startDraft() {
+  dbg('🚀 startDraft() called!');
   if (DATA.poolers.length < 2) return toast('Ajoutez au moins 2 poolers');
   DATA.draft.started = true;
   DATA.draft.currentRound = 1;
   DATA.draft.currentPick = 0;
   DATA.draft.picks = [];
   DATA.draft.completed = false;
+  dbg('🚀 startDraft: about to call saveDraft()');
   saveDraft();
   renderDraft();
   toast('🏒 Le draft est commencé!');
@@ -1662,6 +1730,7 @@ function makePick(value, type) {
   }
 
   dbg(`🏒 makePick: ${value} (${type}) for pooler ${poolerIdx} → total picks=${DATA.draft.picks.length} round=${DATA.draft.currentRound} pick=${DATA.draft.currentPick}`);
+  updateDraftDebugState();
   saveDraft();
   renderDraft();
   document.getElementById('draft-search').value = '';
@@ -1850,6 +1919,7 @@ function renderDraft() {
     }
   }
   updateDraftComposition();
+  updateDraftDebugState();
 }
 
 // ============================================================
