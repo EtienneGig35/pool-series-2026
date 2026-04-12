@@ -135,8 +135,12 @@ input::placeholder { color: var(--text2); }
 @media (max-width: 768px) {
   .nav { flex-wrap: wrap; }
   .nav-tab { padding: 12px 10px; font-size: 12px; }
-  .page { padding: 16px; }
+  .nav-logo { font-size: 15px; padding: 12px 8px 12px 0; }
+  .page { padding: 12px; }
   .pred-series { flex-direction: column; align-items: flex-start; }
+  table { font-size: 13px; }
+  th, td { padding: 8px 6px; white-space: nowrap; }
+  .pooler-stats { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 /* DEADLINE */
@@ -184,7 +188,7 @@ input::placeholder { color: var(--text2); }
     <span><span class="status-dot offline" id="status-dot"></span> Données NHL: non chargées</span>
     <span id="last-update"></span>
   </div>
-  <div class="card">
+  <div class="card" style="overflow-x:auto">
     <table>
       <thead>
         <tr>
@@ -194,7 +198,7 @@ input::placeholder { color: var(--text2); }
           <th style="text-align:right">Joueurs</th>
           <th style="text-align:right">Gardien</th>
           <th style="text-align:right">Équipe</th>
-          <th style="text-align:right">Prédictions</th>
+          <th style="text-align:right">Préd.</th>
           <th style="text-align:right">Bonus</th>
         </tr>
       </thead>
