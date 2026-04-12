@@ -698,6 +698,43 @@ let firebaseReady = false;
 let suppressFirebaseWrite = false;
 let fbRef = null;
 
+// Firebase stores arrays as objects with numeric keys — convert them back
+function fbToArray(val) {
+  if (Array.isArray(val)) return val;
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    const keys = Object.keys(val);
+    if (keys.length > 0 && keys.every(k => !isNaN(k))) {
+      return keys.sort((a, b) => Number(a) - Number(b)).map(k => val[k]);
+    }
+  }
+  return val || [];
+}
+
+// Recursively fix Firebase objects that should be arrays
+function fixFirebaseData(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  // Known array fields
+  const arrayFields = ['picks', 'poolers'];
+  const roundArrayFields = ['1', '2', '3', '4'];
+
+  for (const key of Object.keys(obj)) {
+    if (arrayFields.includes(key)) {
+      obj[key] = fbToArray(obj[key]);
+    } else if (obj[key] && typeof obj[key] === 'object') {
+      // Fix rounds and results sub-objects
+      if ((key === 'rounds' || key === 'results') && typeof obj[key] === 'object') {
+        for (const rn of roundArrayFields) {
+          if (obj[key][rn]) obj[key][rn] = fbToArray(obj[key][rn]);
+        }
+      }
+      if (key === 'draft' && obj[key].picks) {
+        obj[key].picks = fbToArray(obj[key].picks);
+      }
+    }
+  }
+  return obj;
+}
+
 try {
   const firebaseConfig = {
     apiKey: "AIzaSyCBgLTp_zglQkt8WrVFk8JsJtHMllqQgv4",
@@ -723,7 +760,13 @@ try {
       saveAll();
       return;
     }
-    console.log('📥 Firebase: données reçues | draft picks:', remote.draft?.picks?.length || 0, '| passwords:', Object.keys(remote.passwords || {}).length);
+    // Fix Firebase objects that should be arrays
+    fixFirebaseData(remote);
+    const remoteDraft = remote.draft || {};
+    remoteDraft.picks = fbToArray(remoteDraft.picks);
+    const remotePoolers = fbToArray(remote.poolers);
+
+    console.log('📥 Firebase: données reçues | draft started:', remoteDraft.started, '| picks:', remoteDraft.picks?.length || 0, '| passwords:', Object.keys(remote.passwords || {}).length);
     suppressFirebaseWrite = true;
     // Merge passwords: remote wins for conflicts, but keep local-only passwords
     const localPasswords = DATA.passwords || {};
@@ -735,7 +778,24 @@ try {
     const mergedPreds = { ...localPreds, ...remotePreds };
     // Keep local nhlData (not synced via Firebase — too large, fetched from NHL API separately)
     const localNhlData = DATA.nhlData || DEFAULT_DATA.nhlData;
-    DATA = { ...DEFAULT_DATA, ...remote, draft: { ...DEFAULT_DATA.draft, ...(remote.draft||{}) }, nhlData: localNhlData, deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) }, passwords: mergedPasswords, predictions: mergedPreds };
+    // Fix rounds/results arrays
+    const remoteRounds = remote.rounds || DEFAULT_DATA.rounds;
+    const remoteResults = remote.results || DEFAULT_DATA.results;
+    for (const rn of ['1','2','3','4']) {
+      remoteRounds[rn] = fbToArray(remoteRounds[rn]);
+      remoteResults[rn] = fbToArray(remoteResults[rn]);
+    }
+    DATA = {
+      ...DEFAULT_DATA, ...remote,
+      poolers: remotePoolers.length ? remotePoolers : DATA.poolers,
+      draft: { ...DEFAULT_DATA.draft, ...remoteDraft, picks: remoteDraft.picks || [] },
+      nhlData: localNhlData,
+      rounds: remoteRounds,
+      results: remoteResults,
+      deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) },
+      passwords: mergedPasswords,
+      predictions: mergedPreds
+    };
     localStorage.setItem('pool2026', JSON.stringify(DATA));
     // If local had data not yet in Firebase, push only those specific paths
     const hasLocalPw = Object.keys(localPasswords).some(k => !remotePasswords[k]);
@@ -1279,7 +1339,16 @@ function loginDraft() {
   renderDraft();
   // Request notification permission
   if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
+    Notification.requestPermission().then(perm => {
+      console.log('🔔 Notification permission:', perm);
+      updateNotificationStatus();
+      if (perm === 'granted') {
+        toast('✅ Notifications activées!');
+        notifyMyTurn(); // Check immediately if it's their turn
+      }
+    });
+  } else if ('Notification' in window && Notification.permission === 'granted') {
+    notifyMyTurn(); // Check immediately if it's their turn
   }
 }
 
@@ -1295,22 +1364,29 @@ let lastNotifiedRound = null;
 let lastNotifiedPick = null;
 
 function notifyMyTurn() {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  if (!draftLoggedPooler) return;
+  if (!('Notification' in window)) { console.log('🔕 Notifications: API non disponible'); return; }
+  if (Notification.permission !== 'granted') { console.log('🔕 Notifications: permission =', Notification.permission); return; }
+  if (!draftLoggedPooler) { console.log('🔕 Notifications: pas connecté au draft'); return; }
   if (!DATA.draft.started || DATA.draft.completed) return;
   const n = DATA.poolers.length;
   const order = getDraftOrder(DATA.draft.currentRound, n);
   const currentPooler = DATA.poolers[order[DATA.draft.currentPick]]?.name;
+  console.log('🔔 Check notification: tour de', currentPooler, '| connecté:', draftLoggedPooler);
   // Only notify once per turn change
   if (currentPooler === draftLoggedPooler &&
       (lastNotifiedRound !== DATA.draft.currentRound || lastNotifiedPick !== DATA.draft.currentPick)) {
     lastNotifiedRound = DATA.draft.currentRound;
     lastNotifiedPick = DATA.draft.currentPick;
-    new Notification('🏒 Pool Séries 2026', {
-      body: `C'est ton tour de drafter, ${draftLoggedPooler}! (Ronde ${DATA.draft.currentRound})`,
-      tag: 'draft-turn', // Prevents duplicate notifications
-      renotify: true
-    });
+    console.log('🔔 ENVOI notification!');
+    try {
+      new Notification('🏒 Pool Séries 2026', {
+        body: `C'est ton tour de drafter, ${draftLoggedPooler}! (Ronde ${DATA.draft.currentRound})`,
+        tag: 'draft-turn',
+        renotify: true
+      });
+    } catch(e) {
+      console.error('❌ Notification error:', e);
+    }
   }
 }
 
