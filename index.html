@@ -182,7 +182,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span style="font-size:10px;color:var(--text2);opacity:.6" title="Version du code">v13</span>
+    <span style="font-size:10px;color:var(--text2);opacity:.6" title="Version du code">v14</span>
   </div>
 </nav>
 
@@ -274,7 +274,7 @@ input::placeholder { color: var(--text2); }
   </div>
 
   <details open style="margin:8px 0;background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:12px">
-    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Debug Draft (v13)</summary>
+    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Debug Draft (v14)</summary>
     <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="testFirebaseWriteDraft()" style="font-size:11px">🧪 Test écriture Firebase</button>
       <button class="btn btn-sm" onclick="readFirebaseDraft()" style="font-size:11px">🔍 Lire Firebase directement</button>
@@ -924,77 +924,89 @@ if (window._fbAppFailed || window._fbDbFailed) {
     dbg('👂 Attaching listener on poolData...');
     fbRef.on('value', snapshot => {
       const remote = snapshot.val();
-      dbg(`📥 LISTENER FIRED — remote=${remote ? 'PRESENT' : 'NULL'}`);
+      dbg('📥 LISTENER FIRED — remote=' + (remote ? 'PRESENT' : 'NULL'));
       if (!remote) {
         dbg('📥 Remote is NULL — checking if local has meaningful data before pushing...');
-        saveAll(); // saveAll() now has safety check against pushing empty data
+        saveAll();
         return;
       }
-      // Fix Firebase objects that should be arrays
-      fixFirebaseData(remote);
-      const remoteDraft = remote.draft || {};
-      remoteDraft.picks = fbToArray(remoteDraft.picks);
-      const remotePoolers = fbToArray(remote.poolers);
-
-      dbg(`📥 Remote data: draft.started=${remoteDraft.started} picks=${remoteDraft.picks?.length||0} poolers=${remotePoolers.length} pw=${Object.keys(remote.passwords||{}).length}`);
-
+      // CRITICAL: try/finally ensures suppressFirebaseWrite is ALWAYS reset to false
       suppressFirebaseWrite = true;
-      // Merge passwords: remote wins for conflicts, but keep local-only passwords
-      const localPasswords = DATA.passwords || {};
-      const remotePasswords = remote.passwords || {};
-      const mergedPasswords = { ...localPasswords, ...remotePasswords };
-      // Merge predictions: remote wins, but keep local-only pooler predictions
-      const localPreds = DATA.predictions || {};
-      const remotePreds = remote.predictions || {};
-      const mergedPreds = { ...localPreds, ...remotePreds };
-      // Keep local nhlData (not synced via Firebase — too large, fetched from NHL API separately)
-      const localNhlData = DATA.nhlData || DEFAULT_DATA.nhlData;
-      // Fix rounds/results arrays
-      const remoteRounds = remote.rounds || DEFAULT_DATA.rounds;
-      const remoteResults = remote.results || DEFAULT_DATA.results;
-      for (const rn of ['1','2','3','4']) {
-        remoteRounds[rn] = fbToArray(remoteRounds[rn]);
-        remoteResults[rn] = fbToArray(remoteResults[rn]);
-      }
-      DATA = {
-        ...DEFAULT_DATA, ...remote,
-        poolers: remotePoolers.length ? remotePoolers : DATA.poolers,
-        draft: { ...DEFAULT_DATA.draft, ...remoteDraft, picks: remoteDraft.picks || [] },
-        nhlData: localNhlData,
-        rounds: remoteRounds,
-        results: remoteResults,
-        deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) },
-        passwords: mergedPasswords,
-        predictions: mergedPreds
-      };
-      dbg(`✅ DATA merged: draft.started=${DATA.draft.started} picks=${DATA.draft.picks.length} pw=${Object.keys(DATA.passwords).length}`);
-      localStorage.setItem('pool2026', JSON.stringify(DATA));
-      // If local had data not yet in Firebase, push only those specific paths
-      const hasLocalPw = Object.keys(localPasswords).some(k => !remotePasswords[k]);
-      const hasLocalPreds = Object.keys(localPreds).some(k => !remotePreds[k]);
-      if (hasLocalPw || hasLocalPreds) {
+      try {
+        // Fix Firebase objects that should be arrays
+        fixFirebaseData(remote);
+        const remoteDraft = remote.draft || {};
+        remoteDraft.picks = fbToArray(remoteDraft.picks);
+        const remotePoolers = fbToArray(remote.poolers);
+
+        dbg('📥 Remote data: draft.started=' + remoteDraft.started + ' picks=' + (remoteDraft.picks?.length||0) + ' poolers=' + remotePoolers.length + ' pw=' + Object.keys(remote.passwords||{}).length);
+
+        // Merge passwords: remote wins for conflicts, but keep local-only passwords
+        const localPasswords = DATA.passwords || {};
+        const remotePasswords = remote.passwords || {};
+        const mergedPasswords = { ...localPasswords, ...remotePasswords };
+        // Merge predictions: remote wins, but keep local-only pooler predictions
+        const localPreds = DATA.predictions || {};
+        const remotePreds = remote.predictions || {};
+        const mergedPreds = { ...localPreds, ...remotePreds };
+        // Keep local nhlData (not synced via Firebase — too large, fetched from NHL API separately)
+        const localNhlData = DATA.nhlData || DEFAULT_DATA.nhlData;
+        // Fix rounds/results arrays
+        const remoteRounds = remote.rounds || DEFAULT_DATA.rounds;
+        const remoteResults = remote.results || DEFAULT_DATA.results;
+        for (const rn of ['1','2','3','4']) {
+          remoteRounds[rn] = fbToArray(remoteRounds[rn]);
+          remoteResults[rn] = fbToArray(remoteResults[rn]);
+        }
+        DATA = {
+          ...DEFAULT_DATA, ...remote,
+          poolers: remotePoolers.length ? remotePoolers : DATA.poolers,
+          draft: { ...DEFAULT_DATA.draft, ...remoteDraft, picks: remoteDraft.picks || [] },
+          nhlData: localNhlData,
+          rounds: remoteRounds,
+          results: remoteResults,
+          deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) },
+          passwords: mergedPasswords,
+          predictions: mergedPreds
+        };
+        dbg('✅ DATA merged: draft.started=' + DATA.draft.started + ' picks=' + DATA.draft.picks.length + ' pw=' + Object.keys(DATA.passwords).length);
+        localStorage.setItem('pool2026', JSON.stringify(DATA));
+        // If local had data not yet in Firebase, push only those specific paths
+        const hasLocalPw = Object.keys(localPasswords).some(k => !remotePasswords[k]);
+        const hasLocalPreds = Object.keys(localPreds).some(k => !remotePreds[k]);
+        if (hasLocalPw || hasLocalPreds) {
+          suppressFirebaseWrite = false;
+          if (hasLocalPw) { dbg('📤 Pushing local-only passwords to Firebase'); savePasswords(); }
+          if (hasLocalPreds) { dbg('📤 Pushing local-only predictions to Firebase'); savePredictions(); }
+        }
+        // Validate saved sessions against updated passwords
+        if (typeof validateSavedSessions === 'function') validateSavedSessions();
+        // Re-render active page
+        try {
+          const activePage = document.querySelector('.page.active');
+          if (activePage) {
+            const id = activePage.id.replace('page-', '');
+            dbg('🎨 Re-rendering page: ' + id);
+            if (id === 'standings') renderStandings();
+            if (id === 'draft') renderDraft();
+            if (id === 'predictions') renderPredictions();
+            if (id === 'poolers') renderPoolerDetail();
+            if (id === 'config') renderConfig();
+          }
+        } catch(renderErr) {
+          dbg('❌ Render error: ' + renderErr.message);
+        }
+        // Always check notifications regardless of active tab
+        try { notifyMyTurn(); } catch(e) { dbg('❌ notifyMyTurn error: ' + e.message); }
+        try { updateNotificationStatus(); } catch(e) {}
+      } catch(listenerErr) {
+        dbg('❌ LISTENER CRASH: ' + listenerErr.message + ' | ' + listenerErr.stack);
+        console.error('Firebase listener error:', listenerErr);
+      } finally {
+        // ALWAYS reset — this was the root cause of the sync bug
         suppressFirebaseWrite = false;
-        if (hasLocalPw) { dbg('📤 Pushing local-only passwords to Firebase'); savePasswords(); }
-        if (hasLocalPreds) { dbg('📤 Pushing local-only predictions to Firebase'); savePredictions(); }
-        suppressFirebaseWrite = true;
+        dbg('🔓 suppressFirebaseWrite = false (finally block)');
       }
-      // Validate saved sessions against updated passwords
-      if (typeof validateSavedSessions === 'function') validateSavedSessions();
-      // Re-render active page
-      const activePage = document.querySelector('.page.active');
-      if (activePage) {
-        const id = activePage.id.replace('page-', '');
-        dbg(`🎨 Re-rendering page: ${id}`);
-        if (id === 'standings') renderStandings();
-        if (id === 'draft') renderDraft();
-        if (id === 'predictions') renderPredictions();
-        if (id === 'poolers') renderPoolerDetail();
-        if (id === 'config') renderConfig();
-      }
-      // Always check notifications regardless of active tab
-      notifyMyTurn();
-      updateNotificationStatus();
-      suppressFirebaseWrite = false;
     }, err => {
       // This second callback catches listener errors (permission denied, etc.)
       dbg(`❌ LISTENER ERROR: ${err.code} ${err.message}`);
