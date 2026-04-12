@@ -182,7 +182,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span style="font-size:10px;color:var(--text2);opacity:.6" title="Version du code">v12</span>
+    <span style="font-size:10px;color:var(--text2);opacity:.6" title="Version du code">v13</span>
   </div>
 </nav>
 
@@ -274,7 +274,7 @@ input::placeholder { color: var(--text2); }
   </div>
 
   <details open style="margin:8px 0;background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:12px">
-    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Debug Draft (v12)</summary>
+    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Debug Draft (v13)</summary>
     <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="testFirebaseWriteDraft()" style="font-size:11px">🧪 Test écriture Firebase</button>
       <button class="btn btn-sm" onclick="readFirebaseDraft()" style="font-size:11px">🔍 Lire Firebase directement</button>
@@ -1693,49 +1693,58 @@ function updateDraftComposition() {
 }
 
 function makePick(value, type) {
-  const n = DATA.poolers.length;
-  const order = getDraftOrder(DATA.draft.currentRound, n);
-  const poolerIdx = order[DATA.draft.currentPick];
-  const currentPoolerName = DATA.poolers[poolerIdx]?.name;
+  try {
+    dbg('🏒 makePick CALLED: value=' + value + ' type=' + type);
+    const n = DATA.poolers.length;
+    const order = getDraftOrder(DATA.draft.currentRound, n);
+    const poolerIdx = order[DATA.draft.currentPick];
+    const currentPoolerName = DATA.poolers[poolerIdx]?.name;
 
-  // Turn validation: only the current pooler or admin can pick
-  if (draftLoggedPooler && draftLoggedPooler !== currentPoolerName && draftLoggedPooler !== DATA.adminPooler) {
-    toast('❌ Ce n\'est pas votre tour!');
-    return;
-  }
-
-  // Enforce composition limits
-  const counts = getPoolerPickCounts(poolerIdx);
-  const limit = DRAFT_LIMITS[type];
-  if (limit !== undefined && counts[type] >= limit) {
-    const labels = { forward: 'attaquants', defenseman: 'défenseurs', goalie: 'gardien', team: 'équipe' };
-    toast(`❌ Limite atteinte pour les ${labels[type]}! (${counts[type]}/${limit})`);
-    return;
-  }
-
-  DATA.draft.picks.push({
-    round: DATA.draft.currentRound,
-    poolerIdx,
-    value,
-    type
-  });
-
-  DATA.draft.currentPick++;
-  if (DATA.draft.currentPick >= n) {
-    DATA.draft.currentPick = 0;
-    DATA.draft.currentRound++;
-    if (DATA.draft.currentRound > DATA.draft.totalRounds) {
-      DATA.draft.completed = true;
+    // Turn validation: only the current pooler or admin can pick
+    if (draftLoggedPooler && draftLoggedPooler !== currentPoolerName && draftLoggedPooler !== DATA.adminPooler) {
+      toast('❌ Ce n\'est pas votre tour!');
+      return;
     }
-  }
 
-  dbg(`🏒 makePick: ${value} (${type}) for pooler ${poolerIdx} → total picks=${DATA.draft.picks.length} round=${DATA.draft.currentRound} pick=${DATA.draft.currentPick}`);
-  updateDraftDebugState();
-  saveDraft();
-  renderDraft();
-  document.getElementById('draft-search').value = '';
-  document.getElementById('draft-results').classList.remove('show');
-  toast(`✅ ${DATA.poolers[poolerIdx].name} a choisi: ${value}`);
+    // Enforce composition limits
+    const counts = getPoolerPickCounts(poolerIdx);
+    const limit = DRAFT_LIMITS[type];
+    if (limit !== undefined && counts[type] >= limit) {
+      const labels = { forward: 'attaquants', defenseman: 'défenseurs', goalie: 'gardien', team: 'équipe' };
+      toast('❌ Limite atteinte pour les ' + labels[type] + '! (' + counts[type] + '/' + limit + ')');
+      return;
+    }
+
+    DATA.draft.picks.push({
+      round: DATA.draft.currentRound,
+      poolerIdx,
+      value,
+      type
+    });
+
+    DATA.draft.currentPick++;
+    if (DATA.draft.currentPick >= n) {
+      DATA.draft.currentPick = 0;
+      DATA.draft.currentRound++;
+      if (DATA.draft.currentRound > DATA.draft.totalRounds) {
+        DATA.draft.completed = true;
+      }
+    }
+
+    dbg('🏒 makePick DONE: picks=' + DATA.draft.picks.length + ' round=' + DATA.draft.currentRound + ' pick=' + DATA.draft.currentPick);
+    updateDraftDebugState();
+    dbg('🏒 makePick: about to call saveDraft()');
+    saveDraft();
+    renderDraft();
+    document.getElementById('draft-search').value = '';
+    document.getElementById('draft-results').classList.remove('show');
+    toast('✅ ' + DATA.poolers[poolerIdx].name + ' a choisi: ' + value);
+  } catch(err) {
+    dbg('❌ makePick ERROR: ' + err.message + ' | stack: ' + err.stack);
+    console.error('makePick error:', err);
+    // Try to save anyway
+    try { saveDraft(); } catch(e2) { dbg('❌ saveDraft fallback ERROR: ' + e2.message); }
+  }
 }
 
 function getAllDraftedValues() {
