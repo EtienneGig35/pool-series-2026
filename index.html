@@ -1687,7 +1687,7 @@ function notifyMyTurn() {
     if (DATA.draft.picks.length > 0) {
       const lastPick = DATA.draft.picks[DATA.draft.picks.length - 1];
       const prevPoolerName = DATA.poolers[lastPick.poolerIdx]?.name || '?';
-      const typeLabels = { F: 'Attaquant', D: 'Défenseur', G: 'Gardien', T: 'Équipe' };
+      const typeLabels = { forward: 'Attaquant', defenseman: 'Défenseur', goalie: 'Gardien', team: 'Équipe', player: 'Joueur' };
       const typeLabel = typeLabels[lastPick.type] || lastPick.type;
       prevInfo = '\n' + prevPoolerName + ' a choisi : ' + lastPick.value + ' (' + typeLabel + ')';
     }
@@ -1879,6 +1879,7 @@ function shuffleArray(arr) {
 function startDraft() {
   dbg('🚀 startDraft() called!');
   if (DATA.poolers.length < 2) return toast('Ajoutez au moins 2 poolers');
+  if (!confirm('Commencer le draft avec ' + DATA.poolers.length + ' poolers? L\'ordre sera tiré au hasard. Cette action est irréversible.')) return;
   // Randomize draft order by shuffling poolers
   shuffleArray(DATA.poolers);
   const orderNames = DATA.poolers.map(p => p.name).join(', ');
@@ -1901,6 +1902,9 @@ function startDraft() {
 function resetDraft() {
   if (!confirm('Êtes-vous sûr de vouloir réinitialiser le draft?')) return;
   DATA.draft = { started: false, completed: false, picks: [], currentRound: 1, currentPick: 0, totalRounds: 10 };
+  // Reset draft order notification so it fires again on next start
+  _draftOrderNotified = '';
+  localStorage.removeItem('draftOrderNotified');
   saveDraft();
   renderDraft();
   toast('Draft réinitialisé');
@@ -1958,6 +1962,14 @@ function makePick(value, type) {
     // Turn validation: only the current pooler or admin can pick
     if (draftLoggedPooler && draftLoggedPooler !== currentPoolerName && draftLoggedPooler !== DATA.adminPooler) {
       toast('❌ Ce n\'est pas votre tour!');
+      return;
+    }
+
+    // Check if player/team already drafted by someone
+    const alreadyDrafted = DATA.draft.picks.some(p => norm(p.value) === norm(value));
+    if (alreadyDrafted) {
+      toast('❌ ' + value + ' a déjà été choisi!');
+      renderDraft();
       return;
     }
 
@@ -2706,7 +2718,7 @@ function renderConfigContent() {
     const val = DATA.deadlines[key] ? new Date(DATA.deadlines[key]).toISOString().slice(0,16) : '';
     return `<div>
       <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">${label}</label>
-      <input type="datetime-local" value="${val}" style="width:100%" onchange="DATA.deadlines['${key}']=this.value?new Date(this.value+':00').toISOString():'';saveData();toast('Échéance mise à jour')">
+      <input type="datetime-local" value="${val}" style="width:100%" onchange="DATA.deadlines['${key}']=this.value?new Date(this.value+':00').toISOString():'';saveDeadlines();toast('Échéance mise à jour')">
     </div>`;
   }).join('');
 }
