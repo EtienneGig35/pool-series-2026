@@ -1748,9 +1748,23 @@ function getDraftOrder(round, numPoolers) {
   return (round % 2 === 0) ? order.reverse() : order;
 }
 
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function startDraft() {
   dbg('🚀 startDraft() called!');
   if (DATA.poolers.length < 2) return toast('Ajoutez au moins 2 poolers');
+  // Randomize draft order by shuffling poolers
+  shuffleArray(DATA.poolers);
+  const orderNames = DATA.poolers.map(p => p.name).join(', ');
+  dbg('🎲 Ordre aléatoire: ' + orderNames);
+  // Save shuffled poolers to Firebase
+  fbWrite('poolers', DATA.poolers);
   DATA.draft.started = true;
   DATA.draft.currentRound = 1;
   DATA.draft.currentPick = 0;
@@ -1759,7 +1773,7 @@ function startDraft() {
   dbg('🚀 startDraft: about to call saveDraft()');
   saveDraft();
   renderDraft();
-  toast('🏒 Le draft est commencé!');
+  toast('🏒 Le draft est commencé! Ordre: ' + orderNames);
 }
 
 function resetDraft() {
