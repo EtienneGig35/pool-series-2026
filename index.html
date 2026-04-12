@@ -178,16 +178,17 @@ input::placeholder { color: var(--text2); }
 <body>
 
 <nav class="nav">
-  <div class="nav-logo" style="cursor:pointer" onclick="showGuide()">🏒 Pool <span>Séries 2026</span></div>
+  <div class="nav-logo" style="cursor:pointer" onclick="document.querySelector('[data-page=standings]').click()">🏒 Pool <span>Séries 2026</span></div>
   <div class="nav-tab active" data-page="standings">Classement</div>
   <div class="nav-tab" data-page="draft">Draft</div>
   <div class="nav-tab" data-page="predictions">Prédictions</div>
   <div class="nav-tab" data-page="poolers">Détails Poolers</div>
+  <div class="nav-tab" data-page="guide">Règlements</div>
   <div class="nav-tab" data-page="config">Config</div>
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v15</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v16</span>
   </div>
 </nav>
 
@@ -534,17 +535,36 @@ input::placeholder { color: var(--text2); }
 
   <!-- NOTIFICATIONS -->
   <div class="card">
-    <h3>🔔 Activer les notifications</h3>
+    <h3>🔔 Notifications — Activer et tester</h3>
     <div style="font-size:14px;color:var(--text2);line-height:2">
-      Le site peut t'envoyer une notification quand c'est ton tour de drafter!<br><br>
-      <strong style="color:var(--accent)">Comment activer</strong><br>
-      1. Ouvre le site dans ton navigateur (Chrome, Safari, Firefox, Edge).<br>
-      2. Va dans l'onglet <strong style="color:var(--text)">Draft</strong> et connecte-toi.<br>
-      3. Ton navigateur te demandera la permission d'envoyer des notifications — clique <strong style="color:var(--text)">Autoriser</strong>.<br>
-      4. Si tu as manqué le popup, va dans les paramètres de ton navigateur → Notifications et autorise le site.<br><br>
-      <strong style="color:var(--accent)">Important</strong><br>
-      — Les notifications fonctionnent uniquement si le site est ouvert dans un onglet de ton navigateur.<br>
-      — Sur mobile, assure-toi que les notifications du navigateur sont activées dans les réglages de ton téléphone.
+      Le site t'envoie une <strong style="color:var(--text)">notification push</strong> quand c'est ton tour de drafter! La notification inclut le choix du pooler précédent, la ronde en cours et le numéro de ton choix.<br><br>
+
+      <strong style="color:var(--accent)">📱 Étape 1 — Installer l'app (recommandé)</strong><br>
+      Pour des notifications fiables sur mobile, installe l'app sur ton écran d'accueil:<br>
+      — <strong style="color:var(--text)">Android (Chrome)</strong> : une bannière « Installer » apparaît automatiquement. Sinon, ouvre le menu ⋮ → « Ajouter à l'écran d'accueil ».<br>
+      — <strong style="color:var(--text)">iPhone/iPad (Safari)</strong> : appuie sur le bouton Partager (⬆️) → « Sur l'écran d'accueil ».<br>
+      — <strong style="color:var(--text)">Ordinateur</strong> : fonctionne directement dans le navigateur, pas besoin d'installer.<br><br>
+
+      <strong style="color:var(--accent)">🔓 Étape 2 — Autoriser les notifications</strong><br>
+      1. Ouvre le site (ou l'app installée).<br>
+      2. Clique sur l'icône 🔔 en haut à droite de la page.<br>
+      3. Ton navigateur affichera un popup — clique <strong style="color:var(--text)">Autoriser</strong>.<br>
+      4. L'icône passera de 🔔 orange à 🔔 vert = les notifications sont activées.<br><br>
+
+      <strong style="color:var(--accent)">✅ Étape 3 — Tester</strong><br>
+      1. Clique à nouveau sur l'icône 🔔 verte — une notification test apparaîtra.<br>
+      2. Si tu la reçois, tout est prêt!<br>
+      3. Si tu ne la reçois pas, vérifie tes réglages (voir ci-dessous).<br><br>
+
+      <strong style="color:var(--accent)">⚙️ Dépannage</strong><br>
+      — <strong style="color:var(--text)">Android</strong> : Paramètres → Applications → Chrome (ou l'app Pool) → Notifications → Activé.<br>
+      — <strong style="color:var(--text)">iPhone</strong> : Réglages → Notifications → Safari (ou l'app Pool) → Autoriser les notifications.<br>
+      — <strong style="color:var(--text)">Navigateur</strong> : si l'icône est 🔕, les notifications sont bloquées. Va dans les paramètres du navigateur → Confidentialité → Notifications → cherche « etiennegig35.github.io » → Autoriser.<br><br>
+
+      <strong style="color:var(--accent)">💡 Bon à savoir</strong><br>
+      — Tu dois être <strong style="color:var(--text)">connecté(e)</strong> dans l'onglet Draft pour recevoir les notifications de ton tour.<br>
+      — Sur mobile, garde le site ou l'app ouverte en arrière-plan pour des notifications plus fiables.<br>
+      — La notification t'indiquera quel joueur/gardien/équipe le pooler précédent a choisi.
     </div>
   </div>
 
@@ -574,7 +594,8 @@ input::placeholder { color: var(--text2); }
       <strong style="color:var(--accent)">Prédictions</strong> — Pour soumettre tes prédictions de séries et de la finale.<br>
       <strong style="color:var(--accent)">Détails Poolers</strong> — Voir en détail l'équipe et les statistiques de chaque pooler.<br>
       <strong style="color:var(--accent)">Config</strong> — Réservé à l'admin pour la gestion du pool.<br>
-      <strong style="color:var(--accent)">Logo 🏒</strong> — Clique sur le logo en haut à gauche pour revenir à ce guide à tout moment!<br><br>
+      <strong style="color:var(--accent)">Règlements</strong> — Ce guide complet avec les règlements, la procédure du draft, les notifications, etc.<br>
+      <strong style="color:var(--accent)">Logo 🏒</strong> — Clique sur le logo en haut à gauche pour revenir au classement.<br><br>
       <strong style="color:var(--accent)">Rafraîchir</strong> — Le bouton ⟳ met à jour les données NHL en temps réel. Les statistiques sont aussi rafraîchies automatiquement toutes les 6 heures.
     </div>
   </div>
@@ -1640,10 +1661,22 @@ function notifyMyTurn() {
       (lastNotifiedRound !== DATA.draft.currentRound || lastNotifiedPick !== DATA.draft.currentPick)) {
     lastNotifiedRound = DATA.draft.currentRound;
     lastNotifiedPick = DATA.draft.currentPick;
-    dbg('🔔 ENVOI notification: tour de ' + draftLoggedPooler);
+    // Calculate total pick number (1-based)
+    const totalPickNum = (DATA.draft.currentRound - 1) * n + DATA.draft.currentPick + 1;
+    const totalPicks = DATA.draft.totalRounds * n;
+    // Get previous pick info
+    let prevInfo = '';
+    if (DATA.draft.picks.length > 0) {
+      const lastPick = DATA.draft.picks[DATA.draft.picks.length - 1];
+      const prevPoolerName = DATA.poolers[lastPick.poolerIdx]?.name || '?';
+      const typeLabels = { F: 'attaquant', D: 'défenseur', G: 'gardien', T: 'équipe' };
+      const typeLabel = typeLabels[lastPick.type] || lastPick.type;
+      prevInfo = '\n' + prevPoolerName + ' a choisi: ' + lastPick.value + ' (' + typeLabel + ')';
+    }
+    dbg('🔔 ENVOI notification: tour de ' + draftLoggedPooler + ' (pick #' + totalPickNum + ')');
     sendSWNotification(
-      '🏒 Pool Séries 2026',
-      'C\'est ton tour de drafter, ' + draftLoggedPooler + '! (Ronde ' + DATA.draft.currentRound + ')',
+      '🏒 C\'est ton tour, ' + draftLoggedPooler + '!',
+      'Ronde ' + DATA.draft.currentRound + ' — Choix #' + totalPickNum + '/' + totalPicks + prevInfo,
       'draft-turn'
     );
   }
