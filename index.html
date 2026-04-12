@@ -977,10 +977,19 @@ if (window._fbAppFailed || window._fbDbFailed) {
 
         dbg('📥 Remote data: draft.started=' + remoteDraft.started + ' picks=' + (remoteDraft.picks?.length||0) + ' poolers=' + remotePoolers.length + ' pw=' + Object.keys(remote.passwords||{}).length);
 
-        // Merge passwords: remote wins for conflicts, but keep local-only passwords
+        // Merge passwords: remote is authoritative (supports deletions), add local-only passwords
         const localPasswords = DATA.passwords || {};
         const remotePasswords = remote.passwords || {};
-        const mergedPasswords = { ...localPasswords, ...remotePasswords };
+        const mergedPasswords = { ...remotePasswords };
+        // Only add local passwords that don't exist in remote (new passwords not yet synced)
+        // But skip recently deleted passwords so resets aren't undone by stale remote data
+        for (const k of Object.keys(localPasswords)) {
+          if (!(k in remotePasswords) && !_recentlyDeletedPasswords.has(k)) mergedPasswords[k] = localPasswords[k];
+        }
+        // Also remove any recently deleted passwords that might still be in remote
+        for (const k of _recentlyDeletedPasswords) {
+          delete mergedPasswords[k];
+        }
         // Merge predictions: remote wins, but keep local-only pooler predictions
         const localPreds = DATA.predictions || {};
         const remotePreds = remote.predictions || {};
@@ -2477,13 +2486,17 @@ function adminEditPredictions() {
   renderPredictionsContent(true); // true = admin mode, ignore deadlines
 }
 
+const _recentlyDeletedPasswords = new Set();
 function resetPoolerPassword(idx) {
   const name = DATA.poolers[idx].name;
   if (!confirm(`Réinitialiser le mot de passe de ${name}? Il/elle devra en créer un nouveau.`)) return;
+  _recentlyDeletedPasswords.add(name);
   delete DATA.passwords[name];
   savePasswords();
   renderConfigContent();
   toast(`Mot de passe de ${name} réinitialisé`);
+  // Clear the deletion flag after Firebase has had time to sync
+  setTimeout(() => _recentlyDeletedPasswords.delete(name), 5000);
 }
 
 function renderConfig() {
