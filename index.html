@@ -8,6 +8,11 @@
 <meta http-equiv="Expires" content="0">
 <title>Pool des séries 2026 — Ligue du Mal</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏒</text></svg>">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6c63ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root {
   --bg: #0f1117;
@@ -182,7 +187,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span style="font-size:10px;color:var(--text2);opacity:.6" title="Version du code">v14</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v15</span>
   </div>
 </nav>
 
@@ -193,10 +198,10 @@ input::placeholder { color: var(--text2); }
     <span><span class="status-dot offline" id="status-dot"></span> Données NHL: non chargées</span>
     <span id="last-update"></span>
   </div>
-  <div class="status-bar" id="firebase-status" style="margin-top:4px">
+  <div class="status-bar debug-panel" id="firebase-status" style="display:none;margin-top:4px">
     <span id="fb-status-text">🔄 Firebase: chargement SDK...</span>
   </div>
-  <details style="margin:8px 0;background:var(--surface2);border-radius:8px;padding:4px 12px;font-size:12px">
+  <details class="debug-panel" style="display:none;margin:8px 0;background:var(--surface2);border-radius:8px;padding:4px 12px;font-size:12px">
     <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Journal Firebase (debug)</summary>
     <pre id="debug-log" style="white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;margin:4px 0;color:var(--text2);font-family:monospace;font-size:11px">Aucun événement encore...</pre>
   </details>
@@ -273,8 +278,8 @@ input::placeholder { color: var(--text2); }
     <div id="draft-board"></div>
   </div>
 
-  <details open style="margin:8px 0;background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:12px">
-    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Debug Draft (v14)</summary>
+  <details class="debug-panel" style="display:none;margin:8px 0;background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:12px">
+    <summary style="cursor:pointer;color:var(--accent);font-weight:600">🔧 Debug Draft</summary>
     <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="testFirebaseWriteDraft()" style="font-size:11px">🧪 Test écriture Firebase</button>
       <button class="btn btn-sm" onclick="readFirebaseDraft()" style="font-size:11px">🔍 Lire Firebase directement</button>
@@ -576,6 +581,16 @@ input::placeholder { color: var(--text2); }
 
   <div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">
     Bonne chance à tous! 🏒🏆 — <em>Ligue du Mal 2026</em>
+  </div>
+</div>
+
+<!-- PWA Install Banner -->
+<div id="pwa-install-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:2px solid var(--accent);padding:12px 16px;z-index:200;font-size:13px;text-align:center">
+  <span style="color:var(--text)">📲 Pour recevoir les notifications, <strong>installe l'app</strong> :</span><br>
+  <span id="pwa-install-instructions" style="color:var(--text2);font-size:12px"></span>
+  <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
+    <button class="btn btn-primary btn-sm" id="pwa-install-btn" onclick="installPWA()" style="display:none">Installer</button>
+    <button class="btn btn-sm" onclick="dismissInstallBanner()">Plus tard</button>
   </div>
 </div>
 
@@ -1017,6 +1032,21 @@ if (window._fbAppFailed || window._fbDbFailed) {
     console.error('❌ Firebase init failed:', e);
     updateFbStatus('❌', 'init échoué: ' + e.message, 'var(--red)');
     toast('❌ Firebase: ' + e.message);
+  }
+}
+
+// Debug mode: 5 rapid clicks on version tag reveals debug panels
+let _vClicks = 0, _vTimer = null;
+function handleVersionClick() {
+  _vClicks++;
+  clearTimeout(_vTimer);
+  _vTimer = setTimeout(() => { _vClicks = 0; }, 1500);
+  if (_vClicks >= 5) {
+    _vClicks = 0;
+    const panels = document.querySelectorAll('.debug-panel');
+    const visible = panels[0]?.style.display !== 'none';
+    panels.forEach(p => p.style.display = visible ? 'none' : '');
+    toast(visible ? '🔧 Debug masqué' : '🔧 Debug activé');
   }
 }
 
@@ -1552,34 +1582,70 @@ function logoutDraft() {
   renderDraft();
 }
 
-// Track last notified state to avoid duplicate notifications
+// ============================================================
+// NOTIFICATIONS via Service Worker (PWA)
+// ============================================================
 let lastNotifiedRound = null;
 let lastNotifiedPick = null;
+let swRegistration = null;
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    swRegistration = reg;
+    console.log('✅ Service Worker enregistré');
+  }).catch(err => {
+    console.warn('Service Worker registration failed:', err);
+  });
+}
+
+function sendSWNotification(title, body, tag) {
+  // Try service worker first (works in background on mobile PWA)
+  if (swRegistration) {
+    swRegistration.showNotification(title, {
+      body: body,
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag: tag || 'draft-turn',
+      renotify: true,
+      vibrate: [200, 100, 200],
+      data: { url: './' }
+    }).catch(err => {
+      console.warn('SW notification failed, falling back:', err);
+      fallbackNotification(title, body, tag);
+    });
+  } else {
+    fallbackNotification(title, body, tag);
+  }
+}
+
+function fallbackNotification(title, body, tag) {
+  try {
+    new Notification(title, { body, tag: tag || 'draft-turn', renotify: true });
+  } catch(e) {
+    console.warn('Fallback notification failed:', e);
+  }
+}
 
 function notifyMyTurn() {
-  if (!('Notification' in window)) { console.log('🔕 Notifications: API non disponible'); return; }
-  if (Notification.permission !== 'granted') { console.log('🔕 Notifications: permission =', Notification.permission); return; }
-  if (!draftLoggedPooler) { console.log('🔕 Notifications: pas connecté au draft'); return; }
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  if (!draftLoggedPooler) return;
   if (!DATA.draft.started || DATA.draft.completed) return;
   const n = DATA.poolers.length;
   const order = getDraftOrder(DATA.draft.currentRound, n);
   const currentPooler = DATA.poolers[order[DATA.draft.currentPick]]?.name;
-  console.log('🔔 Check notification: tour de', currentPooler, '| connecté:', draftLoggedPooler);
   // Only notify once per turn change
   if (currentPooler === draftLoggedPooler &&
       (lastNotifiedRound !== DATA.draft.currentRound || lastNotifiedPick !== DATA.draft.currentPick)) {
     lastNotifiedRound = DATA.draft.currentRound;
     lastNotifiedPick = DATA.draft.currentPick;
-    console.log('🔔 ENVOI notification!');
-    try {
-      new Notification('🏒 Pool Séries 2026', {
-        body: `C'est ton tour de drafter, ${draftLoggedPooler}! (Ronde ${DATA.draft.currentRound})`,
-        tag: 'draft-turn',
-        renotify: true
-      });
-    } catch(e) {
-      console.error('❌ Notification error:', e);
-    }
+    dbg('🔔 ENVOI notification: tour de ' + draftLoggedPooler);
+    sendSWNotification(
+      '🏒 Pool Séries 2026',
+      'C\'est ton tour de drafter, ' + draftLoggedPooler + '! (Ronde ' + DATA.draft.currentRound + ')',
+      'draft-turn'
+    );
   }
 }
 
@@ -1588,7 +1654,7 @@ function updateNotificationStatus() {
   if (!el) return;
   if (!('Notification' in window)) {
     el.textContent = '🔕';
-    el.title = 'Notifications non supportées par ce navigateur';
+    el.title = 'Notifications non supportées';
     el.style.background = 'rgba(239,83,80,.15)';
   } else if (Notification.permission === 'granted') {
     el.textContent = '🔔';
@@ -1596,7 +1662,7 @@ function updateNotificationStatus() {
     el.style.background = 'rgba(76,175,80,.15)';
   } else if (Notification.permission === 'denied') {
     el.textContent = '🔕';
-    el.title = 'Notifications bloquées — activez-les dans les paramètres du navigateur';
+    el.title = 'Notifications bloquées — activez dans les paramètres';
     el.style.background = 'rgba(239,83,80,.15)';
   } else {
     el.textContent = '🔔';
@@ -1607,26 +1673,19 @@ function updateNotificationStatus() {
 
 function toggleNotifications() {
   if (!('Notification' in window)) {
-    toast('❌ Les notifications ne sont pas supportées par ce navigateur');
+    toast('❌ Notifications non supportées par ce navigateur');
     return;
   }
   if (Notification.permission === 'granted') {
-    // Send a test notification
-    new Notification('🏒 Pool Séries 2026', {
-      body: 'Les notifications fonctionnent! Tu seras alerté quand ce sera ton tour.',
-      tag: 'test'
-    });
+    sendSWNotification('🏒 Pool Séries 2026', 'Les notifications fonctionnent!', 'test');
     toast('✅ Notification test envoyée!');
   } else if (Notification.permission === 'denied') {
-    toast('⚠️ Notifications bloquées. Va dans Paramètres du navigateur → Notifications pour les réactiver.');
+    toast('⚠️ Notifications bloquées. Va dans Paramètres → Notifications pour les réactiver.');
   } else {
     Notification.requestPermission().then(perm => {
       updateNotificationStatus();
       if (perm === 'granted') {
-        new Notification('🏒 Pool Séries 2026', {
-          body: 'Notifications activées! Tu seras alerté quand ce sera ton tour.',
-          tag: 'test'
-        });
+        sendSWNotification('🏒 Pool Séries 2026', 'Notifications activées!', 'test');
         toast('✅ Notifications activées!');
       } else {
         toast('❌ Notifications refusées');
@@ -2527,6 +2586,64 @@ updateDataStatus();
 
 // Auto-refresh NHL data on page load (silently, shows toast only on success)
 refreshAll();
+
+// ============================================================
+// PWA INSTALL BANNER
+// ============================================================
+let deferredInstallPrompt = null;
+
+// Capture the beforeinstallprompt event (Android Chrome)
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner('android');
+});
+
+function showInstallBanner(platform) {
+  if (localStorage.getItem('pwa-dismissed')) return;
+  // Don't show if already installed (standalone mode)
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+  if (window.navigator.standalone) return; // iOS
+
+  const banner = document.getElementById('pwa-install-banner');
+  const instructions = document.getElementById('pwa-install-instructions');
+  const installBtn = document.getElementById('pwa-install-btn');
+
+  if (platform === 'android' && deferredInstallPrompt) {
+    instructions.textContent = 'Clique sur Installer pour ajouter l\'app à ton écran d\'accueil.';
+    installBtn.style.display = '';
+  } else if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+    instructions.innerHTML = 'Dans Safari, appuie sur <strong>Partager</strong> (⬆️) puis <strong>Sur l\'écran d\'accueil</strong>.';
+  } else {
+    return; // Desktop — don't show banner
+  }
+  banner.style.display = '';
+}
+
+function installPWA() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(result => {
+      if (result.outcome === 'accepted') {
+        toast('✅ App installée!');
+      }
+      deferredInstallPrompt = null;
+      document.getElementById('pwa-install-banner').style.display = 'none';
+    });
+  }
+}
+
+function dismissInstallBanner() {
+  document.getElementById('pwa-install-banner').style.display = 'none';
+  localStorage.setItem('pwa-dismissed', '1');
+}
+
+// Show iOS install hint after a short delay
+setTimeout(() => {
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone) {
+    showInstallBanner('ios');
+  }
+}, 3000);
 </script>
 </body>
 </html>
