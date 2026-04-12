@@ -1669,14 +1669,14 @@ function notifyMyTurn() {
     if (DATA.draft.picks.length > 0) {
       const lastPick = DATA.draft.picks[DATA.draft.picks.length - 1];
       const prevPoolerName = DATA.poolers[lastPick.poolerIdx]?.name || '?';
-      const typeLabels = { F: 'attaquant', D: 'défenseur', G: 'gardien', T: 'équipe' };
+      const typeLabels = { F: 'Attaquant', D: 'Défenseur', G: 'Gardien', T: 'Équipe' };
       const typeLabel = typeLabels[lastPick.type] || lastPick.type;
-      prevInfo = '\n' + prevPoolerName + ' a choisi: ' + lastPick.value + ' (' + typeLabel + ')';
+      prevInfo = '\n' + prevPoolerName + ' a choisi : ' + lastPick.value + ' (' + typeLabel + ')';
     }
     dbg('🔔 ENVOI notification: tour de ' + draftLoggedPooler + ' (pick #' + totalPickNum + ')');
     sendSWNotification(
       '🏒 C\'est ton tour, ' + draftLoggedPooler + '!',
-      'Ronde ' + DATA.draft.currentRound + ' — Choix #' + totalPickNum + '/' + totalPicks + prevInfo,
+      'Ronde ' + DATA.draft.currentRound + ' — Choix #' + totalPickNum + ' au total' + prevInfo,
       'draft-turn'
     );
   }
