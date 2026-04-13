@@ -1675,7 +1675,7 @@ function notifyMyTurn() {
   const order = getDraftOrder(DATA.draft.currentRound, n);
   const currentPooler = DATA.poolers[order[DATA.draft.currentPick]]?.name;
   // Only notify once per turn change
-  if (currentPooler === draftLoggedPooler &&
+  if (currentPooler && draftLoggedPooler && norm(currentPooler) === norm(draftLoggedPooler) &&
       (lastNotifiedRound !== DATA.draft.currentRound || lastNotifiedPick !== DATA.draft.currentPick)) {
     lastNotifiedRound = DATA.draft.currentRound;
     lastNotifiedPick = DATA.draft.currentPick;
@@ -1708,7 +1708,7 @@ function notifyDraftOrder() {
   // Only notify once per pooler per draft session
   const key = draftLoggedPooler + '_' + DATA.poolers.map(p=>p.name).join(',');
   if (_draftOrderNotified === key) return;
-  const idx = DATA.poolers.findIndex(p => p.name === draftLoggedPooler);
+  const idx = DATA.poolers.findIndex(p => norm(p.name) === norm(draftLoggedPooler));
   if (idx < 0) return;
   const position = idx + 1;
   const suffix = position === 1 ? 'er' : 'e';
@@ -1960,7 +1960,7 @@ function makePick(value, type) {
     const currentPoolerName = DATA.poolers[poolerIdx]?.name;
 
     // Turn validation: only the current pooler or admin can pick
-    if (draftLoggedPooler && draftLoggedPooler !== currentPoolerName && draftLoggedPooler !== DATA.adminPooler) {
+    if (draftLoggedPooler && draftLoggedPooler !== currentPoolerName && norm(draftLoggedPooler) !== norm(DATA.adminPooler)) {
       toast('❌ Ce n\'est pas votre tour!');
       return;
     }
@@ -2122,7 +2122,7 @@ function renderDraft() {
   const loginPanel = document.getElementById('draft-login-panel');
   const controlsPanel = document.getElementById('draft-controls');
   const loggedInfo = document.getElementById('draft-logged-info');
-  const isAdmin = draftLoggedPooler === DATA.adminPooler;
+  const isAdmin = draftLoggedPooler && norm(draftLoggedPooler) === norm(DATA.adminPooler);
 
   // Populate pooler select
   populateDraftSelect();
@@ -2145,7 +2145,7 @@ function renderDraft() {
   // Search: visible when draft started, not completed, and it's this pooler's turn (or admin)
   const currentPoolerIdx = d.started && !d.completed ? getDraftOrder(d.currentRound, n)[d.currentPick] : -1;
   const currentPoolerName = currentPoolerIdx >= 0 ? DATA.poolers[currentPoolerIdx]?.name : null;
-  const isMyTurn = draftLoggedPooler === currentPoolerName || isAdmin;
+  const isMyTurn = (draftLoggedPooler && norm(draftLoggedPooler) === norm(currentPoolerName)) || isAdmin;
   searchWrap.style.display = (d.started && !d.completed && isMyTurn) ? '' : 'none';
 
   if (d.completed) {
@@ -2190,8 +2190,8 @@ function renderDraft() {
       if (pick?.type === 'team') cls += ' team-pick';
       if (pick?.type === 'defenseman') cls += ' defenseman';
       const label = pick ? pick.value : (isCurrent ? '⏳' : '');
-      const typeIcon = pick?.type === 'goalie' ? '🥅 ' : pick?.type === 'team' ? '🏟️ ' : pick?.type === 'defenseman' ? '🛡️ ' : pick?.type === 'forward' ? '🏒 ' : pick?.type === 'player' ? '🏒 ' : '';
-      board.innerHTML += `<div class="${cls}" title="${pick?.type || ''}">${typeIcon}${label}</div>`;
+      const typeLabel = pick?.type === 'goalie' ? 'Gardien' : pick?.type === 'team' ? 'Équipe' : pick?.type === 'defenseman' ? 'Défenseur' : pick?.type === 'forward' ? 'Attaquant' : '';
+      board.innerHTML += `<div class="${cls}" title="${typeLabel}">${label}</div>`;
     }
   }
   updateDraftComposition();
