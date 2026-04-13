@@ -650,7 +650,7 @@ const DEFAULT_DATA = {
   },
   predictions: {},
   passwords: {},     // { poolerName: 'password' }
-  adminPooler: 'Étienne G',
+  adminPooler: 'Étienne G.',
   deadlines: {
     finale: '2026-04-18T23:59:00-04:00',  // Prédictions finale: 18 avril 23h59 ET
     1: '2026-04-18T23:59:00-04:00',        // Ronde 1: veille du début des séries
@@ -1494,6 +1494,8 @@ function calcFinaleBonus(poolerName) {
 }
 
 function norm(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+function normLoose(s) { return norm(s).replace(/[^a-z0-9 ]/g, '').replace(/\s+/g,' ').trim(); }
+function isAdmin(name) { return name && normLoose(name) === normLoose(DATA.adminPooler); }
 
 function getEliminatedTeams() {
   // An eliminated team is the loser of a series (i.e. not the winner)
@@ -1989,7 +1991,7 @@ function makePick(value, type) {
     const currentPoolerName = DATA.poolers[poolerIdx]?.name;
 
     // Turn validation: only the current pooler or admin can pick
-    if (draftLoggedPooler && draftLoggedPooler !== currentPoolerName && norm(draftLoggedPooler) !== norm(DATA.adminPooler)) {
+    if (draftLoggedPooler && draftLoggedPooler !== currentPoolerName && !isAdmin(draftLoggedPooler)) {
       toast('❌ Ce n\'est pas votre tour!');
       return;
     }
@@ -2151,7 +2153,7 @@ function renderDraft() {
   const loginPanel = document.getElementById('draft-login-panel');
   const controlsPanel = document.getElementById('draft-controls');
   const loggedInfo = document.getElementById('draft-logged-info');
-  const isAdmin = draftLoggedPooler && norm(draftLoggedPooler) === norm(DATA.adminPooler);
+  const isAdminUser = isAdmin(draftLoggedPooler);
 
   // Populate pooler select
   populateDraftSelect();
@@ -2160,21 +2162,21 @@ function renderDraft() {
   if (draftLoggedPooler) {
     loginPanel.style.display = 'none';
     controlsPanel.style.display = 'flex';
-    loggedInfo.innerHTML = `Connecté: <strong style="color:var(--accent)">${draftLoggedPooler}</strong>${isAdmin ? ' <span class="badge badge-gold">Admin</span>' : ''}`;
+    loggedInfo.innerHTML = `Connecté: <strong style="color:var(--accent)">${draftLoggedPooler}</strong>${isAdminUser ? ' <span class="badge badge-gold">Admin</span>' : ''}`;
   } else {
     loginPanel.style.display = 'flex';
     controlsPanel.style.display = 'none';
   }
 
   // Admin-only buttons: start, undo, reset
-  btnStart.style.display = (!d.started && isAdmin) ? '' : 'none';
-  btnUndo.style.display = (d.started && isAdmin) ? '' : 'none';
-  btnReset.style.display = (d.started && isAdmin) ? '' : 'none';
+  btnStart.style.display = (!d.started && isAdminUser) ? '' : 'none';
+  btnUndo.style.display = (d.started && isAdminUser) ? '' : 'none';
+  btnReset.style.display = (d.started && isAdminUser) ? '' : 'none';
 
   // Search: visible when draft started, not completed, and it's this pooler's turn (or admin)
   const currentPoolerIdx = d.started && !d.completed ? getDraftOrder(d.currentRound, n)[d.currentPick] : -1;
   const currentPoolerName = currentPoolerIdx >= 0 ? DATA.poolers[currentPoolerIdx]?.name : null;
-  const isMyTurn = (draftLoggedPooler && norm(draftLoggedPooler) === norm(currentPoolerName)) || isAdmin;
+  const isMyTurn = (draftLoggedPooler && norm(draftLoggedPooler) === norm(currentPoolerName)) || isAdminUser;
   searchWrap.style.display = (d.started && !d.completed && isMyTurn) ? '' : 'none';
 
   if (d.completed) {
