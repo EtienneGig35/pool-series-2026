@@ -188,7 +188,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v16</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v18</span>
   </div>
 </nav>
 
@@ -784,17 +784,42 @@ function saveDraft() {
   fbWrite('draft', DATA.draft);
 }
 
+// Firebase keys cannot contain . $ # [ ] /
+function fbSafeKey(name) {
+  return (name || '').replace(/[.$#\[\]/]/g, '_');
+}
+
+// Convert passwords/predictions objects to use safe keys for Firebase
+function toSafeKeys(obj) {
+  const safe = {};
+  for (const [k, v] of Object.entries(obj || {})) safe[fbSafeKey(k)] = v;
+  return safe;
+}
+
+// Convert safe-keyed Firebase data back to original pooler names
+function fromSafeKeys(obj, poolerNames) {
+  if (!obj) return {};
+  const result = {};
+  // Build reverse map: safeKey → original name
+  const reverseMap = {};
+  for (const name of poolerNames) reverseMap[fbSafeKey(name)] = name;
+  for (const [k, v] of Object.entries(obj)) {
+    result[reverseMap[k] || k] = v;
+  }
+  return result;
+}
+
 function savePasswords() {
   saveData();
-  fbWrite('passwords', DATA.passwords);
+  fbWrite('passwords', toSafeKeys(DATA.passwords));
 }
 
 function savePredictions(poolerName) {
   saveData();
   if (poolerName) {
-    fbWrite('predictions/' + poolerName, DATA.predictions[poolerName]);
+    fbWrite('predictions/' + fbSafeKey(poolerName), DATA.predictions[poolerName]);
   } else {
-    fbWrite('predictions', DATA.predictions);
+    fbWrite('predictions', toSafeKeys(DATA.predictions));
   }
 }
 
@@ -978,13 +1003,16 @@ if (window._fbAppFailed || window._fbDbFailed) {
         dbg('📥 Remote data: draft.started=' + remoteDraft.started + ' picks=' + (remoteDraft.picks?.length||0) + ' poolers=' + remotePoolers.length + ' pw=' + Object.keys(remote.passwords||{}).length);
 
         // Merge passwords: remote is authoritative (supports deletions), add local-only passwords
+        // Remote uses safe keys (dots replaced), convert back to real pooler names
+        const poolerNames = (remotePoolers.length ? remotePoolers : DATA.poolers).map(p => p.name);
         const localPasswords = DATA.passwords || {};
-        const remotePasswords = remote.passwords || {};
+        const remotePasswordsSafe = remote.passwords || {};
+        const remotePasswords = fromSafeKeys(remotePasswordsSafe, poolerNames);
         const mergedPasswords = { ...remotePasswords };
         // Only add local passwords that don't exist in remote (new passwords not yet synced)
         // But skip recently deleted passwords so resets aren't undone by stale remote data
         for (const k of Object.keys(localPasswords)) {
-          if (!(k in remotePasswords) && !_recentlyDeletedPasswords.has(k)) mergedPasswords[k] = localPasswords[k];
+          if (!(k in mergedPasswords) && !_recentlyDeletedPasswords.has(k)) mergedPasswords[k] = localPasswords[k];
         }
         // Also remove any recently deleted passwords that might still be in remote
         for (const k of _recentlyDeletedPasswords) {
@@ -992,7 +1020,8 @@ if (window._fbAppFailed || window._fbDbFailed) {
         }
         // Merge predictions: remote wins, but keep local-only pooler predictions
         const localPreds = DATA.predictions || {};
-        const remotePreds = remote.predictions || {};
+        const remotePredsSafe = remote.predictions || {};
+        const remotePreds = fromSafeKeys(remotePredsSafe, poolerNames);
         const mergedPreds = { ...localPreds, ...remotePreds };
         // Keep local nhlData (not synced via Firebase — too large, fetched from NHL API separately)
         const localNhlData = DATA.nhlData || DEFAULT_DATA.nhlData;
