@@ -275,6 +275,16 @@ input::placeholder { color: var(--text2); }
     </div>
     <button class="btn" onclick="logoutDraft()" style="margin-left:auto;font-size:12px">🔓 Déconnexion</button>
   </div>
+  <!-- Phone number prompt -->
+  <div class="card" id="draft-phone-prompt" style="display:none;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--accent)">
+    <span style="font-size:13px">📱 Entre ton numéro de cellulaire pour que les autres poolers puissent te contacter quand c'est ton tour :</span>
+    <input type="tel" id="draft-phone-input" placeholder="514-555-1234" style="width:160px;font-size:14px">
+    <button class="btn btn-primary" onclick="saveMyPhone()" style="font-size:12px">Enregistrer</button>
+    <button class="btn" onclick="dismissPhonePrompt()" style="font-size:11px;opacity:0.7">Plus tard</button>
+  </div>
+  <!-- Contact next pooler banner -->
+  <div class="card" id="draft-contact-banner" style="display:none;background:var(--green);color:#000;text-align:center;padding:16px;border-radius:8px">
+  </div>
 
   <div class="card" style="overflow-x:auto">
     <div id="draft-board"></div>
@@ -395,7 +405,7 @@ input::placeholder { color: var(--text2); }
         <button class="btn btn-primary btn-sm" onclick="addPooler()">+ Ajouter</button>
       </div>
       <table>
-        <thead><tr><th>Nom</th><th>Payé</th><th>Mot de passe</th><th style="width:80px"></th></tr></thead>
+        <thead><tr><th>Nom</th><th>Payé</th><th>Mot de passe</th><th>📱 Cell</th><th style="width:80px"></th></tr></thead>
         <tbody id="config-poolers"></tbody>
       </table>
     </div>
@@ -513,7 +523,9 @@ input::placeholder { color: var(--text2); }
       4. Utilise la barre de recherche pour trouver ton choix.<br>
       5. Clique sur le joueur/gardien/équipe désiré pour confirmer ta sélection.<br><br>
       <strong style="color:var(--accent)">Synchronisation en temps réel</strong><br>
-      Toutes les sélections sont synchronisées instantanément via Firebase. Tu peux voir les choix des autres poolers en direct, même si vous n'êtes pas en ligne en même temps.
+      Toutes les sélections sont synchronisées instantanément via Firebase. Tu peux voir les choix des autres poolers en direct, même si vous n'êtes pas en ligne en même temps.<br><br>
+      <strong style="color:var(--accent)">📱 Aviser le prochain pooler</strong><br>
+      Puisque le draft est asynchrone, il est important d'aviser la prochaine personne quand c'est son tour. Après chaque sélection, le site affiche automatiquement le nom et le numéro de cellulaire du prochain pooler avec un bouton pour lui envoyer un texto. Pour que ça fonctionne, chaque pooler doit enregistrer son numéro de cellulaire lors de sa première connexion au Draft.
     </div>
   </div>
 
@@ -1030,6 +1042,11 @@ if (window._fbAppFailed || window._fbDbFailed) {
         const remotePredsSafe = remote.predictions || {};
         const remotePreds = fromSafeKeys(remotePredsSafe, poolerNames);
         const mergedPreds = { ...localPreds, ...remotePreds };
+        // Merge phones: remote wins, keep local-only
+        const localPhones = DATA.phones || {};
+        const remotePhonesSafe = remote.phones || {};
+        const remotePhones = fromSafeKeys(remotePhonesSafe, poolerNames);
+        const mergedPhones = { ...localPhones, ...remotePhones };
         // Keep local nhlData (not synced via Firebase — too large, fetched from NHL API separately)
         const localNhlData = DATA.nhlData || DEFAULT_DATA.nhlData;
         // Fix rounds/results arrays
@@ -1048,7 +1065,8 @@ if (window._fbAppFailed || window._fbDbFailed) {
           results: remoteResults,
           deadlines: { ...DEFAULT_DATA.deadlines, ...(remote.deadlines||{}) },
           passwords: mergedPasswords,
-          predictions: mergedPreds
+          predictions: mergedPreds,
+          phones: mergedPhones
         };
         dbg('✅ DATA merged: draft.started=' + DATA.draft.started + ' picks=' + DATA.draft.picks.length + ' pw=' + Object.keys(DATA.passwords).length);
         localStorage.setItem('pool2026', JSON.stringify(DATA));
@@ -2062,6 +2080,7 @@ function makePick(value, type) {
     document.getElementById('draft-search').value = '';
     document.getElementById('draft-results').classList.remove('show');
     toast('✅ ' + DATA.poolers[poolerIdx].name + ' a choisi: ' + value);
+    showContactBanner();
   } catch(err) {
     dbg('❌ makePick ERROR: ' + err.message + ' | stack: ' + err.stack);
     console.error('makePick error:', err);
@@ -2072,6 +2091,65 @@ function makePick(value, type) {
 
 function getAllDraftedValues() {
   return new Set(DATA.draft.picks.map(p => norm(p.value)));
+}
+
+// --- Phone number management ---
+function saveMyPhone() {
+  const input = document.getElementById('draft-phone-input');
+  const phone = (input.value || '').replace(/[^0-9+]/g, '');
+  if (phone.length < 10) { toast('❌ Numéro invalide'); return; }
+  const name = draftLoggedPooler || loggedPooler;
+  if (!name) return;
+  DATA.phones[name] = phone;
+  savePhones();
+  document.getElementById('draft-phone-prompt').style.display = 'none';
+  toast('✅ Numéro enregistré!');
+}
+
+function dismissPhonePrompt() {
+  document.getElementById('draft-phone-prompt').style.display = 'none';
+  sessionStorage.setItem('phonePromptDismissed', 'true');
+}
+
+function checkPhonePrompt() {
+  const el = document.getElementById('draft-phone-prompt');
+  if (!el) return;
+  const name = draftLoggedPooler;
+  if (!name || DATA.phones[name] || sessionStorage.getItem('phonePromptDismissed')) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'flex';
+}
+
+function showContactBanner() {
+  const banner = document.getElementById('draft-contact-banner');
+  if (!banner) return;
+  if (DATA.draft.completed) { banner.style.display = 'none'; return; }
+  const n = DATA.poolers.length;
+  const order = getDraftOrder(DATA.draft.currentRound, n);
+  const nextPoolerIdx = order[DATA.draft.currentPick];
+  const nextPooler = DATA.poolers[nextPoolerIdx];
+  if (!nextPooler) { banner.style.display = 'none'; return; }
+  const nextName = nextPooler.name;
+  const nextPhone = DATA.phones[nextName];
+  const cleanPhone = nextPhone ? nextPhone.replace(/[^0-9+]/g, '') : '';
+  // Don't show if the next pooler is yourself
+  if (draftLoggedPooler && normLoose(draftLoggedPooler) === normLoose(nextName)) {
+    banner.style.display = 'none';
+    return;
+  }
+  let html = `<div style="font-size:16px;font-weight:bold;margin-bottom:8px">📱 Prochaine personne à repêcher : ${nextName}</div>`;
+  if (cleanPhone) {
+    const smsBody = encodeURIComponent('Hey ' + nextName.split(' ')[0] + '! C\'est ton tour de repêcher dans le Pool Séries 2026! 🏒');
+    html += `<div style="font-size:14px;margin-bottom:10px">Écris-lui pour l'inviter à faire son choix :</div>`;
+    html += `<a href="sms:${cleanPhone}?body=${smsBody}" style="display:inline-block;background:#000;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:bold">💬 Texter ${nextName.split(' ')[0]} au ${nextPhone}</a>`;
+  } else {
+    html += `<div style="font-size:14px">⚠️ ${nextName} n'a pas encore enregistré son numéro de cellulaire.</div>`;
+  }
+  html += `<div style="margin-top:8px"><button class="btn" onclick="this.closest('.card').style.display='none'" style="font-size:11px;background:rgba(0,0,0,0.2);color:#000;border:none">Fermer</button></div>`;
+  banner.innerHTML = html;
+  banner.style.display = '';
 }
 
 function onDraftSearch(query) {
@@ -2194,10 +2272,14 @@ function renderDraft() {
     loginPanel.style.display = 'none';
     controlsPanel.style.display = 'flex';
     loggedInfo.innerHTML = `Connecté: <strong style="color:var(--accent)">${draftLoggedPooler}</strong>${isAdminUser ? ' <span class="badge badge-gold">Admin</span>' : ''}`;
+    checkPhonePrompt();
   } else {
     loginPanel.style.display = 'flex';
     controlsPanel.style.display = 'none';
+    document.getElementById('draft-phone-prompt').style.display = 'none';
   }
+  // Hide contact banner on render (only show after a pick)
+  document.getElementById('draft-contact-banner').style.display = 'none';
 
   // Admin-only buttons: start, undo, reset
   btnStart.style.display = (!d.started && isAdminUser) ? '' : 'none';
@@ -2729,6 +2811,7 @@ function renderConfigContent() {
       <td><input type="text" value="${p.name}" onchange="DATA.poolers[${i}].name=this.value;savePoolers()" style="width:150px">${p.name===DATA.adminPooler?' <span class="badge badge-blue">Admin</span>':''}</td>
       <td><input type="checkbox" ${p.paid?'checked':''} onchange="DATA.poolers[${i}].paid=this.checked;savePoolers()"></td>
       <td>${DATA.passwords[p.name] ? '<span class="badge badge-green">Actif</span>' : '<span class="badge deadline-tbd">Aucun</span>'}</td>
+      <td>${DATA.phones[p.name] ? `<span style="font-size:12px">${DATA.phones[p.name]}</span>` : '<span class="badge deadline-tbd">—</span>'}</td>
       <td style="display:flex;gap:4px">
         ${DATA.passwords[p.name] ? `<button class="btn btn-sm" onclick="resetPoolerPassword(${i})" title="Réinitialiser mdp">🔑</button>` : ''}
         ${p.name!==DATA.adminPooler ? `<button class="btn btn-danger btn-sm" onclick="removePooler(${i})">✕</button>` : ''}
