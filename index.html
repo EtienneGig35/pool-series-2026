@@ -2094,11 +2094,18 @@ function getAllDraftedValues() {
 }
 
 // --- Phone number management ---
+// Find the canonical pooler name (from DATA.poolers) matching a logged-in name
+function findPoolerName(loggedName) {
+  if (!loggedName) return null;
+  const pooler = DATA.poolers.find(p => normLoose(p.name) === normLoose(loggedName));
+  return pooler ? pooler.name : loggedName;
+}
+
 function saveMyPhone() {
   const input = document.getElementById('draft-phone-input');
   const phone = (input.value || '').replace(/[^0-9+]/g, '');
   if (phone.length < 10) { toast('❌ Numéro invalide'); return; }
-  const name = draftLoggedPooler || loggedPooler;
+  const name = findPoolerName(draftLoggedPooler || loggedPooler);
   if (!name) return;
   DATA.phones[name] = phone;
   savePhones();
@@ -2114,7 +2121,7 @@ function dismissPhonePrompt() {
 function checkPhonePrompt() {
   const el = document.getElementById('draft-phone-prompt');
   if (!el) return;
-  const name = draftLoggedPooler;
+  const name = findPoolerName(draftLoggedPooler);
   if (!name || DATA.phones[name] || sessionStorage.getItem('phonePromptDismissed')) {
     el.style.display = 'none';
     return;
