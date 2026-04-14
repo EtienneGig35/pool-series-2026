@@ -1098,6 +1098,23 @@ if (window._fbAppFailed || window._fbDbFailed) {
   }
 }
 
+// --- Force refresh when tab becomes visible again (Chrome throttles background tabs) ---
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && typeof fbRef !== 'undefined' && fbRef) {
+    dbg('👁️ Tab visible again — forcing Firebase re-read');
+    fbRef.once('value').then(snapshot => {
+      dbg('👁️ Force re-read complete');
+    }).catch(e => dbg('👁️ Force re-read error: ' + e.message));
+  }
+});
+
+// --- Keep-alive: periodically poke Firebase to prevent WebSocket from sleeping ---
+setInterval(() => {
+  if (typeof fbRef !== 'undefined' && fbRef && document.visibilityState === 'hidden') {
+    fbRef.once('value').then(() => {}).catch(() => {});
+  }
+}, 30000); // every 30 seconds
+
 // Debug mode: 5 rapid clicks on version tag reveals debug panels
 let _vClicks = 0, _vTimer = null;
 function handleVersionClick() {
