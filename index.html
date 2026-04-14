@@ -2580,7 +2580,9 @@ function renderPoolerDetail() {
   const bonusPts = calcFinaleBonus(poolerName);
   const total = playerPts + goaliePts + teamPts + predPts + bonusPts;
 
+  const poolerPhone = DATA.phones[poolerName];
   let html = `
+    ${poolerPhone ? `<div style="font-size:13px;color:var(--text2);margin-bottom:8px">📱 <a href="sms:${poolerPhone.replace(/[^0-9+]/g,'')}" style="color:var(--accent)">${poolerPhone}</a></div>` : ''}
     <div class="pooler-stats">
       <div class="stat-card"><div class="val">${total}</div><div class="lbl">Total</div></div>
       <div class="stat-card"><div class="val">${playerPts}</div><div class="lbl">Joueurs</div></div>
