@@ -265,6 +265,7 @@ input::placeholder { color: var(--text2); }
     <div style="display:flex;gap:8px;align-items:center">
       <label style="font-size:12px;color:var(--text2)">Type:</label>
       <select id="pick-type" style="font-size:12px">
+        <option value="all" selected>Tous</option>
         <option value="forward">Attaquant</option>
         <option value="defenseman">Défenseur</option>
         <option value="goalie">Gardien</option>
@@ -2060,59 +2061,65 @@ function onDraftSearch(query) {
   const FWD_POS = ['C', 'L', 'R', 'LW', 'RW'];
   const DEF_POS = ['D'];
 
-  if (type === 'forward') {
-    if (DATA.nhlData.skaters.length) {
-      const posFiltered = DATA.nhlData.skaters.filter(s => FWD_POS.includes(s.pos));
-      const filtered = q
-        ? posFiltered.filter(s => norm(s.name).includes(q) || norm(s.team).includes(q))
-        : posFiltered;
-      const isReg = DATA.nhlData.skaters[0]?.regSeason;
-      items = filtered.slice(0, 25).map(s => ({
-        name: s.name,
-        detail: `${s.pos} — ${s.team} — ${s.points} pts${isReg ? ' (sais. rég.)' : ''}`,
-        taken: drafted.has(norm(s.name))
-      }));
-    }
-  } else if (type === 'defenseman') {
-    if (DATA.nhlData.skaters.length) {
-      const posFiltered = DATA.nhlData.skaters.filter(s => DEF_POS.includes(s.pos));
-      const filtered = q
-        ? posFiltered.filter(s => norm(s.name).includes(q) || norm(s.team).includes(q))
-        : posFiltered;
-      const isReg = DATA.nhlData.skaters[0]?.regSeason;
-      items = filtered.slice(0, 25).map(s => ({
-        name: s.name,
-        detail: `D — ${s.team} — ${s.points} pts${isReg ? ' (sais. rég.)' : ''}`,
-        taken: drafted.has(norm(s.name))
-      }));
-    }
-  } else if (type === 'goalie') {
-    if (DATA.nhlData.goalies.length) {
-      const filtered = q
-        ? DATA.nhlData.goalies.filter(g => norm(g.name).includes(q) || norm(g.team).includes(q))
-        : DATA.nhlData.goalies;
-      const isReg = DATA.nhlData.goalies[0]?.regSeason;
-      items = filtered.slice(0, 25).map(g => ({
-        name: g.name,
-        detail: `${g.team} — ${g.wins}V ${g.shutouts}BL${isReg ? ' (sais. rég.)' : ''}`,
-        taken: drafted.has(norm(g.name))
-      }));
-    }
-  } else if (type === 'team') {
-    if (DATA.nhlData.teams.length) {
-      const filtered = q
-        ? DATA.nhlData.teams.filter(t => norm(t.name).includes(q))
-        : DATA.nhlData.teams;
-      const isReg = DATA.nhlData.teams[0]?.regSeason;
-      items = filtered.slice(0, 25).map(t => ({
-        name: t.name,
-        detail: `${t.wins}V-${t.losses}D${isReg ? ' (sais. rég.)' : ''}`,
-        taken: drafted.has(norm(t.name))
-      }));
-    }
+  function buildSkaterItems(posFilter, typeLabel) {
+    if (!DATA.nhlData.skaters.length) return [];
+    const posFiltered = DATA.nhlData.skaters.filter(s => posFilter.includes(s.pos));
+    const filtered = q
+      ? posFiltered.filter(s => norm(s.name).includes(q) || norm(s.team).includes(q))
+      : posFiltered;
+    const isReg = DATA.nhlData.skaters[0]?.regSeason;
+    return filtered.map(s => ({
+      name: s.name,
+      detail: `${s.pos} — ${s.team} — ${s.points} pts${isReg ? ' (sais. rég.)' : ''}`,
+      taken: drafted.has(norm(s.name)),
+      realType: typeLabel
+    }));
+  }
+  function buildGoalieItems() {
+    if (!DATA.nhlData.goalies.length) return [];
+    const filtered = q
+      ? DATA.nhlData.goalies.filter(g => norm(g.name).includes(q) || norm(g.team).includes(q))
+      : DATA.nhlData.goalies;
+    const isReg = DATA.nhlData.goalies[0]?.regSeason;
+    return filtered.map(g => ({
+      name: g.name,
+      detail: `${g.team} — ${g.wins}V ${g.shutouts}BL${isReg ? ' (sais. rég.)' : ''}`,
+      taken: drafted.has(norm(g.name)),
+      realType: 'goalie'
+    }));
+  }
+  function buildTeamItems() {
+    if (!DATA.nhlData.teams.length) return [];
+    const filtered = q
+      ? DATA.nhlData.teams.filter(t => norm(t.name).includes(q))
+      : DATA.nhlData.teams;
+    const isReg = DATA.nhlData.teams[0]?.regSeason;
+    return filtered.map(t => ({
+      name: t.name,
+      detail: `${t.wins}V-${t.losses}D${isReg ? ' (sais. rég.)' : ''}`,
+      taken: drafted.has(norm(t.name)),
+      realType: 'team'
+    }));
   }
 
-  if (items.length === 0 && !q) {
+  if (type === 'all') {
+    items = [
+      ...buildSkaterItems(FWD_POS, 'forward'),
+      ...buildSkaterItems(DEF_POS, 'defenseman'),
+      ...buildGoalieItems(),
+      ...buildTeamItems()
+    ].slice(0, 40);
+  } else if (type === 'forward') {
+    items = buildSkaterItems(FWD_POS, 'forward').slice(0, 25);
+  } else if (type === 'defenseman') {
+    items = buildSkaterItems(DEF_POS, 'defenseman').slice(0, 25);
+  } else if (type === 'goalie') {
+    items = buildGoalieItems().slice(0, 25);
+  } else if (type === 'team') {
+    items = buildTeamItems().slice(0, 25);
+  }
+
+  if ((items.length === 0 && !q) || (type === 'all' && (!q || q.length < 2))) {
     container.classList.remove('show');
     return;
   }
@@ -2121,12 +2128,12 @@ function onDraftSearch(query) {
   if (q && q.length >= 2) {
     const exactMatch = items.find(i => norm(i.name) === q);
     if (!exactMatch) {
-      items.unshift({ name: query, detail: 'Entrée libre', taken: drafted.has(norm(query)), free: true });
+      items.unshift({ name: query, detail: 'Entrée libre', taken: drafted.has(norm(query)), free: true, realType: type === 'all' ? 'player' : type });
     }
   }
 
   container.innerHTML = items.map(i =>
-    `<div class="search-item ${i.taken ? 'taken' : ''}" onclick="makePick('${i.name.replace(/'/g,"\\'")}','${type}')">
+    `<div class="search-item ${i.taken ? 'taken' : ''}" onclick="makePick('${i.name.replace(/'/g,"\\'")}','${i.realType || type}')">
       <span>${i.name} ${i.taken ? '(déjà choisi)' : ''}</span>
       <span class="team">${i.detail}</span>
     </div>`
