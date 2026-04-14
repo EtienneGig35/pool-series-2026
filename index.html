@@ -651,6 +651,7 @@ const DEFAULT_DATA = {
   },
   predictions: {},
   passwords: {},     // { poolerName: 'password' }
+  phones: {},        // { poolerName: '5141234567' }
   adminPooler: 'Étienne G.',
   deadlines: {
     finale: '2026-04-18T23:59:00-04:00',  // Prédictions finale: 18 avril 23h59 ET
@@ -674,7 +675,7 @@ function loadData() {
     const saved = localStorage.getItem('pool2026');
     if (saved) {
       const parsed = JSON.parse(saved);
-      const result = { ...DEFAULT_DATA, ...parsed, draft: { ...DEFAULT_DATA.draft, ...(parsed.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(parsed.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(parsed.deadlines||{}) }, passwords: { ...(parsed.passwords||{}) } };
+      const result = { ...DEFAULT_DATA, ...parsed, draft: { ...DEFAULT_DATA.draft, ...(parsed.draft||{}) }, nhlData: { ...DEFAULT_DATA.nhlData, ...(parsed.nhlData||{}) }, deadlines: { ...DEFAULT_DATA.deadlines, ...(parsed.deadlines||{}) }, passwords: { ...(parsed.passwords||{}) }, phones: { ...(parsed.phones||{}) } };
       console.log('🏗️ loadData from localStorage: draft.started=' + result.draft.started + ' picks=' + (result.draft.picks?.length||0) + ' pw=' + Object.keys(result.passwords).length);
       return result;
     }
@@ -827,6 +828,11 @@ function savePredictions(poolerName) {
 function savePoolers() {
   saveData();
   fbWrite('poolers', DATA.poolers);
+}
+
+function savePhones() {
+  saveData();
+  fbWrite('phones', toSafeKeys(DATA.phones));
 }
 
 function saveResults() {
