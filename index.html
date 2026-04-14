@@ -1706,7 +1706,7 @@ function notifyMyTurn() {
   const order = getDraftOrder(DATA.draft.currentRound, n);
   const currentPooler = DATA.poolers[order[DATA.draft.currentPick]]?.name;
   // Only notify once per turn change
-  if (currentPooler && draftLoggedPooler && norm(currentPooler) === norm(draftLoggedPooler) &&
+  if (currentPooler && draftLoggedPooler && normLoose(currentPooler) === normLoose(draftLoggedPooler) &&
       (lastNotifiedRound !== DATA.draft.currentRound || lastNotifiedPick !== DATA.draft.currentPick)) {
     lastNotifiedRound = DATA.draft.currentRound;
     lastNotifiedPick = DATA.draft.currentPick;
@@ -1740,7 +1740,7 @@ function notifyDraftOrder() {
   // Only notify once per pooler per draft session
   const key = draftLoggedPooler + '_' + DATA.poolers.map(p=>p.name).join(',');
   if (_draftOrderNotified === key) { dbg('🎲 SKIP: already notified (key match)'); return; }
-  const idx = DATA.poolers.findIndex(p => norm(p.name) === norm(draftLoggedPooler));
+  const idx = DATA.poolers.findIndex(p => normLoose(p.name) === normLoose(draftLoggedPooler));
   if (idx < 0) { dbg('🎲 SKIP: pooler not found in list. draftLoggedPooler=' + draftLoggedPooler + ' poolers=' + DATA.poolers.map(p=>p.name).join(',')); return; }
   const position = idx + 1;
   const suffix = position === 1 ? 'er' : 'e';
@@ -2177,7 +2177,7 @@ function renderDraft() {
   // Search: visible when draft started, not completed, and it's this pooler's turn (or admin)
   const currentPoolerIdx = d.started && !d.completed ? getDraftOrder(d.currentRound, n)[d.currentPick] : -1;
   const currentPoolerName = currentPoolerIdx >= 0 ? DATA.poolers[currentPoolerIdx]?.name : null;
-  const isMyTurn = (draftLoggedPooler && norm(draftLoggedPooler) === norm(currentPoolerName)) || isAdminUser;
+  const isMyTurn = (draftLoggedPooler && normLoose(draftLoggedPooler) === normLoose(currentPoolerName)) || isAdminUser;
   searchWrap.style.display = (d.started && !d.completed && isMyTurn) ? '' : 'none';
 
   if (d.completed) {
