@@ -1734,13 +1734,14 @@ function notifyMyTurn() {
 // --- Notification: Draft order assigned ---
 let _draftOrderNotified = localStorage.getItem('draftOrderNotified') || '';
 function notifyDraftOrder() {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  if (!draftLoggedPooler || !DATA.draft.started) return;
+  dbg('🎲 notifyDraftOrder called: permission=' + (('Notification' in window) ? Notification.permission : 'N/A') + ' logged=' + draftLoggedPooler + ' started=' + DATA.draft.started);
+  if (!('Notification' in window) || Notification.permission !== 'granted') { dbg('🎲 SKIP: permission not granted'); return; }
+  if (!draftLoggedPooler || !DATA.draft.started) { dbg('🎲 SKIP: not logged or draft not started'); return; }
   // Only notify once per pooler per draft session
   const key = draftLoggedPooler + '_' + DATA.poolers.map(p=>p.name).join(',');
-  if (_draftOrderNotified === key) return;
+  if (_draftOrderNotified === key) { dbg('🎲 SKIP: already notified (key match)'); return; }
   const idx = DATA.poolers.findIndex(p => norm(p.name) === norm(draftLoggedPooler));
-  if (idx < 0) return;
+  if (idx < 0) { dbg('🎲 SKIP: pooler not found in list. draftLoggedPooler=' + draftLoggedPooler + ' poolers=' + DATA.poolers.map(p=>p.name).join(',')); return; }
   const position = idx + 1;
   const suffix = position === 1 ? 'er' : 'e';
   const orderList = DATA.poolers.map((p, i) => `${i+1}. ${p.name}`).join('\n');
@@ -1924,10 +1925,10 @@ function startDraft() {
   DATA.draft.completed = false;
   dbg('🚀 startDraft: about to call saveDraft()');
   saveDraft();
-  renderDraft();
+  // Notify BEFORE render to ensure it fires even if renderDraft crashes
+  try { notifyDraftOrder(); } catch(e) { dbg('❌ notifyDraftOrder error: ' + e.message); }
+  try { renderDraft(); } catch(e) { dbg('❌ renderDraft error in startDraft: ' + e.message); }
   toast('🏒 Le draft est commencé! Ordre: ' + orderNames);
-  // Notify logged-in pooler of their draft position
-  notifyDraftOrder();
 }
 
 function resetDraft() {
