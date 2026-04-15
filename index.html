@@ -480,12 +480,12 @@ input::placeholder { color: var(--text2); }
       — <strong style="color:var(--text)">5 points</strong> si tu prédis le gagnant du trophée Conn Smythe (MVP des séries).<br><br>
       <strong style="color:var(--accent)">Coût de participation</strong><br>
       <strong style="color:var(--text)">25$</strong> par pooler.<br><br>
-      <strong style="color:var(--gold)">💰 Distribution des prix</strong><br>
-      La cagnotte totale = 25$ × nombre de poolers. Elle est distribuée ainsi:<br>
-      — <strong style="color:var(--text)">70%</strong> au gagnant du total de points (55% si 10+ poolers)<br>
-      — <strong style="color:var(--text)">15%</strong> au gagnant des prédictions<br>
-      — <strong style="color:var(--text)">15%</strong> au gagnant des points (joueurs + gardien + équipe)<br>
-      — Si 10+ poolers: <strong style="color:var(--text)">15%</strong> au 2e du total de points
+      <strong style="color:var(--gold)">💰 Distribution des prix (250$)</strong><br>
+      La cagnotte totale = 25$ × 10 poolers = 250$. Elle est distribuée ainsi:<br>
+      — <strong style="color:var(--text)">140$</strong> au #1 du total de points<br>
+      — <strong style="color:var(--text)">40$</strong> au #2 du total de points<br>
+      — <strong style="color:var(--text)">35$</strong> au #1 des prédictions<br>
+      — <strong style="color:var(--text)">35$</strong> au #1 des points (joueurs + gardien + équipe)
     </div>
   </div>
 
@@ -1630,7 +1630,7 @@ function renderStandings() {
   const distEl = document.getElementById('standings-distribution');
   if (distEl) {
     if (numPoolers >= 10) {
-      distEl.innerHTML = `Cagnotte: ${pot}$ — #1 total: ${Math.round(pot * 0.55)}$ (55%), #2 total: ${Math.round(pot * 0.15)}$ (15%), #1 prédictions: ${Math.round(pot * 0.15)}$ (15%), #1 points: ${Math.round(pot * 0.15)}$ (15%)`;
+      distEl.innerHTML = `Cagnotte: ${pot}$ — #1 total: 140$ (56%), #2 total: 40$ (16%), #1 prédictions: 35$ (14%), #1 points: 35$ (14%)`;
     } else {
       distEl.innerHTML = `Cagnotte: ${pot}$ — #1 total: ${Math.round(pot * 0.70)}$ (70%), #1 prédictions: ${Math.round(pot * 0.15)}$ (15%), #1 points: ${Math.round(pot * 0.15)}$ (15%)`;
     }
