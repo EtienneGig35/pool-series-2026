@@ -828,7 +828,7 @@ function savePasswords() {
   fbWrite('passwords', toSafeKeys(DATA.passwords));
 }
 
-function savePredictions(poolerName) {
+function fbSavePredictions(poolerName) {
   saveData();
   if (poolerName) {
     fbWrite('predictions/' + fbSafeKey(poolerName), DATA.predictions[poolerName]);
@@ -1076,7 +1076,7 @@ if (window._fbAppFailed || window._fbDbFailed) {
         if (hasLocalPw || hasLocalPreds) {
           suppressFirebaseWrite = false;
           if (hasLocalPw) { dbg('📤 Pushing local-only passwords to Firebase'); savePasswords(); }
-          if (hasLocalPreds) { dbg('📤 Pushing local-only predictions to Firebase'); savePredictions(); }
+          if (hasLocalPreds) { dbg('📤 Pushing local-only predictions to Firebase'); fbSavePredictions(); }
         }
         // Validate saved sessions against updated passwords
         if (typeof validateSavedSessions === 'function') validateSavedSessions();
@@ -2549,7 +2549,7 @@ function savePredictions() {
   }
 
   DATA.predictions[loggedPooler] = preds;
-  savePredictions(loggedPooler);
+  fbSavePredictions(loggedPooler);
   toast(`✅ Prédictions de ${loggedPooler} sauvegardées!`);
 }
 
