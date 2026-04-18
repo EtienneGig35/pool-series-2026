@@ -19,7 +19,25 @@ def nhl_name(obj):
     return ""
 
 def main():
-    # Standings
+    # Bracket first — source of truth for the 16 playoff teams.
+    bracket = None
+    bracket_abbrevs = []
+    try:
+        bracket = fetch_json(f"{API}/playoff-bracket/2026")
+        seen = set()
+        for s in bracket.get("series", []):
+            for k in ("topSeedTeam", "bottomSeedTeam"):
+                t = s.get(k) or {}
+                a = t.get("abbrev")
+                if a and a not in seen:
+                    seen.add(a)
+                    bracket_abbrevs.append(a)
+        print(f"Bracket: loaded ({len(bracket_abbrevs)} teams: {bracket_abbrevs})")
+    except Exception as e:
+        print(f"Bracket: not available ({e})")
+
+    # Standings — used for team metadata (name, wins/losses, gp) and as a
+    # fallback when the bracket isn't available yet.
     standings = fetch_json(f"{API}/standings/now")
     all_teams = []
     for t in standings.get("standings", []):
@@ -31,8 +49,23 @@ def main():
             "wins": t.get("wins", 0), "losses": t.get("losses", 0),
             "gp": t.get("gamesPlayed", 0), "pts": t.get("points", 0),
         })
-    all_teams.sort(key=lambda x: x["pts"], reverse=True)
-    playoff_teams = all_teams[:16]
+    standings_by_abbrev = {t["abbrev"]: t for t in all_teams}
+
+    if bracket_abbrevs:
+        # Use bracket-determined teams, enriched with standings metadata.
+        playoff_teams = []
+        for abbrev in bracket_abbrevs:
+            meta = standings_by_abbrev.get(abbrev, {})
+            playoff_teams.append({
+                "abbrev": abbrev,
+                "name": meta.get("name", abbrev),
+                "wins": meta.get("wins", 0), "losses": meta.get("losses", 0),
+                "gp": meta.get("gp", 0), "pts": meta.get("pts", 0),
+            })
+    else:
+        # Fallback: top 16 by points (pre-bracket period).
+        all_teams.sort(key=lambda x: x["pts"], reverse=True)
+        playoff_teams = all_teams[:16]
     print(f"Teams: {len(all_teams)}, Playoff: {[t['abbrev'] for t in playoff_teams]}")
 
     # Club stats
@@ -74,14 +107,6 @@ def main():
     skaters.sort(key=lambda x: x["points"], reverse=True)
     goalies.sort(key=lambda x: x["wins"], reverse=True)
     teams_out = [{"name": t["name"], "abbrev": t["abbrev"], "gp": t["gp"], "wins": t["wins"], "losses": t["losses"]} for t in playoff_teams]
-
-    # Bracket
-    bracket = None
-    try:
-        bracket = fetch_json(f"{API}/playoff-bracket/2026")
-        print("Bracket: loaded")
-    except Exception as e:
-        print(f"Bracket: not available ({e})")
 
     data = {
         "skaters": skaters, "goalies": goalies, "teams": teams_out,
