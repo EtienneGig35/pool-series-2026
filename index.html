@@ -891,6 +891,20 @@ function updateFbStatus(emoji, text, color) {
   }
 }
 
+// Poolers whose predictions we saved locally in the last few seconds.
+// The Firebase listener can fire with stale server data (before our write
+// propagated). Without this guard, the merge `{ ...local, ...remote }`
+// would let stale remote wipe our fresh local predictions and the UI would
+// re-render as empty — exactly the "my predictions disappear instantly
+// when I click Sauvegarder" bug.
+const _recentlySavedPredictions = new Set();
+function markPredictionsJustSaved(poolerName) {
+  if (!poolerName) return;
+  _recentlySavedPredictions.add(poolerName);
+  // 8s is more than enough for Firebase to ack + broadcast back.
+  setTimeout(() => _recentlySavedPredictions.delete(poolerName), 8000);
+}
+
 // Firebase stores arrays as objects with numeric keys — convert them back
 function fbToArray(val) {
   if (Array.isArray(val)) return val;
@@ -1037,11 +1051,21 @@ if (window._fbAppFailed || window._fbDbFailed) {
         for (const k of _recentlyDeletedPasswords) {
           delete mergedPasswords[k];
         }
-        // Merge predictions: remote wins, but keep local-only pooler predictions
+        // Merge predictions: remote wins, but keep local-only pooler predictions.
+        // EXCEPTION: if we just saved predictions for a pooler (within 8s), keep the
+        // local version. Otherwise a stale remote snapshot (fired before our write
+        // propagated) would wipe the fresh data we just typed — the infamous
+        // "predictions disappear on Sauvegarder" bug.
         const localPreds = DATA.predictions || {};
         const remotePredsSafe = remote.predictions || {};
         const remotePreds = fromSafeKeys(remotePredsSafe, poolerNames);
         const mergedPreds = { ...localPreds, ...remotePreds };
+        for (const name of _recentlySavedPredictions) {
+          if (localPreds[name]) {
+            mergedPreds[name] = localPreds[name];
+            dbg(`🛡️ Prédictions récemment sauvées — on garde le local pour ${name}`);
+          }
+        }
         // Merge phones: remote wins, keep local-only
         const localPhones = DATA.phones || {};
         const remotePhonesSafe = remote.phones || {};
@@ -2613,6 +2637,9 @@ function savePredictions() {
     }
 
     DATA.predictions[loggedPooler] = preds;
+    // Mark BEFORE the async Firebase write so any listener fire that happens
+    // during the round-trip keeps our fresh local data instead of clobbering it.
+    markPredictionsJustSaved(loggedPooler);
     fbSavePredictions(loggedPooler);
     dbg(`💾 savePredictions OK for ${loggedPooler}: champion=${preds.champion} winners=${newWinners} finale=${newFinale}`);
     toast(`✅ Prédictions de ${loggedPooler} sauvegardées!`);
