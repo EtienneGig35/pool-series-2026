@@ -2521,23 +2521,23 @@ function renderPredictionsContent(adminOverride) {
 // Count non-empty winners across all rounds of a predictions object.
 // Used by the data-loss safeguard in savePredictions.
 function countPredWinners(preds) {
-  if (\!preds || \!preds.rounds) return 0;
+  if (!preds || !preds.rounds) return 0;
   let n = 0;
   for (const rn of [1, 2, 3, 4]) {
     const round = preds.rounds[rn];
-    if (\!Array.isArray(round)) continue;
+    if (!Array.isArray(round)) continue;
     for (const item of round) if (item && item.winner) n++;
   }
   return n;
 }
 
 function countPredFinale(preds) {
-  if (\!preds) return 0;
+  if (!preds) return 0;
   return (preds.champion ? 1 : 0) + (preds.finalist ? 1 : 0) + (preds.connSmythe ? 1 : 0);
 }
 
 function savePredictions() {
-  if (\!loggedPooler) return;
+  if (!loggedPooler) return;
   const isAdmin = adminLoggedIn;
 
   try {
@@ -2554,13 +2554,13 @@ function savePredictions() {
     // Firebase strips empty objects/arrays on write, so a previous save may
     // have removed preds.rounds. Re-initialize defensively so we never crash
     // on preds.rounds[roundNum] = [].
-    if (typeof preds.champion \!== 'string') preds.champion = '';
-    if (typeof preds.finalist \!== 'string') preds.finalist = '';
-    if (typeof preds.connSmythe \!== 'string') preds.connSmythe = '';
-    if (\!preds.rounds || typeof preds.rounds \!== 'object') preds.rounds = {};
+    if (typeof preds.champion !== 'string') preds.champion = '';
+    if (typeof preds.finalist !== 'string') preds.finalist = '';
+    if (typeof preds.connSmythe !== 'string') preds.connSmythe = '';
+    if (!preds.rounds || typeof preds.rounds !== 'object') preds.rounds = {};
 
     // Finale (only save if not locked, or admin)
-    if (isAdmin || \!isDeadlinePassed('finale')) {
+    if (isAdmin || !isDeadlinePassed('finale')) {
       preds.champion = document.getElementById('pred-champion').value;
       preds.finalist = document.getElementById('pred-finalist').value;
       preds.connSmythe = document.getElementById('pred-connsmythe').value;
@@ -2568,7 +2568,7 @@ function savePredictions() {
 
     // Rounds (only save unlocked rounds, or admin)
     for (const roundNum of [1, 2, 3, 4]) {
-      if (\!isAdmin && isDeadlinePassed(roundNum)) continue;
+      if (!isAdmin && isDeadlinePassed(roundNum)) continue;
       preds.rounds[roundNum] = [];
       const series = DATA.rounds[roundNum] || [];
       series.forEach((s, i) => {
@@ -2589,7 +2589,7 @@ function savePredictions() {
     const newFinale = countPredFinale(preds);
     const losingWinners = newWinners < existingWinners;
     const losingFinale = newFinale < existingFinale;
-    if (\!isAdmin && (losingWinners || losingFinale)) {
+    if (!isAdmin && (losingWinners || losingFinale)) {
       const msg =
         `⚠️ Attention — sauvegarde suspecte
 
@@ -2604,7 +2604,7 @@ function savePredictions() {
 
 ` +
         `Continuer la sauvegarde quand même?`;
-      if (\!confirm(msg)) {
+      if (!confirm(msg)) {
         dbg(`🛡️ Save BLOCKED — would lose data (${existingWinners}→${newWinners} winners, ${existingFinale}→${newFinale} finale)`);
         toast('Sauvegarde annulée — tes prédictions existantes sont protégées');
         return;
@@ -2615,7 +2615,7 @@ function savePredictions() {
     DATA.predictions[loggedPooler] = preds;
     fbSavePredictions(loggedPooler);
     dbg(`💾 savePredictions OK for ${loggedPooler}: champion=${preds.champion} winners=${newWinners} finale=${newFinale}`);
-    toast(`✅ Prédictions de ${loggedPooler} sauvegardées\!`);
+    toast(`✅ Prédictions de ${loggedPooler} sauvegardées!`);
   } catch (err) {
     console.error('savePredictions failed:', err);
     dbg('❌ savePredictions ERROR: ' + err.message);
