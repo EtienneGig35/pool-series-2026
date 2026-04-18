@@ -2522,35 +2522,50 @@ function savePredictions() {
   if (!loggedPooler) return;
   const isAdmin = adminLoggedIn;
 
-  // Check which sections are still open
-  const preds = DATA.predictions[loggedPooler] || { champion:'', finalist:'', connSmythe:'', rounds:{} };
+  try {
+    // Check which sections are still open
+    const preds = DATA.predictions[loggedPooler] || { champion:'', finalist:'', connSmythe:'', rounds:{} };
 
-  // Finale (only save if not locked, or admin)
-  if (isAdmin || !isDeadlinePassed('finale')) {
-    preds.champion = document.getElementById('pred-champion').value;
-    preds.finalist = document.getElementById('pred-finalist').value;
-    preds.connSmythe = document.getElementById('pred-connsmythe').value;
-  }
+    // Firebase strips empty objects/arrays on write, so a previous save may
+    // have removed preds.rounds. Re-initialize defensively so we never crash
+    // on preds.rounds[roundNum] = [].
+    if (typeof preds.champion !== 'string') preds.champion = '';
+    if (typeof preds.finalist !== 'string') preds.finalist = '';
+    if (typeof preds.connSmythe !== 'string') preds.connSmythe = '';
+    if (!preds.rounds || typeof preds.rounds !== 'object') preds.rounds = {};
 
-  // Rounds (only save unlocked rounds, or admin)
-  for (const roundNum of [1, 2, 3, 4]) {
-    if (!isAdmin && isDeadlinePassed(roundNum)) continue;
-    preds.rounds[roundNum] = [];
-    const series = DATA.rounds[roundNum] || [];
-    series.forEach((s, i) => {
-      const winnerEl = document.querySelector(`[data-round="${roundNum}"][data-idx="${i}"][data-field="winner"]`);
-      const gamesEl = document.querySelector(`[data-round="${roundNum}"][data-idx="${i}"][data-field="games"]`);
-      preds.rounds[roundNum].push({
-        series: s,
-        winner: winnerEl?.value || '',
-        games: gamesEl?.value || ''
+    // Finale (only save if not locked, or admin)
+    if (isAdmin || !isDeadlinePassed('finale')) {
+      preds.champion = document.getElementById('pred-champion').value;
+      preds.finalist = document.getElementById('pred-finalist').value;
+      preds.connSmythe = document.getElementById('pred-connsmythe').value;
+    }
+
+    // Rounds (only save unlocked rounds, or admin)
+    for (const roundNum of [1, 2, 3, 4]) {
+      if (!isAdmin && isDeadlinePassed(roundNum)) continue;
+      preds.rounds[roundNum] = [];
+      const series = DATA.rounds[roundNum] || [];
+      series.forEach((s, i) => {
+        const winnerEl = document.querySelector(`[data-round="${roundNum}"][data-idx="${i}"][data-field="winner"]`);
+        const gamesEl = document.querySelector(`[data-round="${roundNum}"][data-idx="${i}"][data-field="games"]`);
+        preds.rounds[roundNum].push({
+          series: s,
+          winner: winnerEl?.value || '',
+          games: gamesEl?.value || ''
+        });
       });
-    });
-  }
+    }
 
-  DATA.predictions[loggedPooler] = preds;
-  fbSavePredictions(loggedPooler);
-  toast(`✅ Prédictions de ${loggedPooler} sauvegardées!`);
+    DATA.predictions[loggedPooler] = preds;
+    fbSavePredictions(loggedPooler);
+    dbg(`💾 savePredictions OK for ${loggedPooler}: champion=${preds.champion} rounds=${Object.keys(preds.rounds).join(',')}`);
+    toast(`✅ Prédictions de ${loggedPooler} sauvegardées!`);
+  } catch (err) {
+    console.error('savePredictions failed:', err);
+    dbg('❌ savePredictions ERROR: ' + err.message);
+    toast('⚠️ Erreur sauvegarde: ' + err.message);
+  }
 }
 
 // ============================================================
