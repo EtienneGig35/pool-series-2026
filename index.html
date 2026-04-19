@@ -188,7 +188,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v20</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v21</span>
   </div>
 </nav>
 
@@ -664,7 +664,7 @@ const DEFAULT_DATA = {
   predictions: {},
   passwords: {},     // { poolerName: 'password' }
   phones: {},        // { poolerName: '5141234567' }
-  adminPooler: 'Étienne G.',
+  adminPooler: 'Étienne G',
   deadlines: {
     finale: '2026-04-18T23:59:00-04:00',  // Prédictions finale: 18 avril 23h59 ET
     1: '2026-04-18T23:59:00-04:00',        // Ronde 1: veille du début des séries
@@ -1096,11 +1096,27 @@ if (window._fbAppFailed || window._fbDbFailed) {
         localStorage.setItem('pool2026', JSON.stringify(DATA));
         // If local had data not yet in Firebase, push only those specific paths
         const hasLocalPw = Object.keys(localPasswords).some(k => !remotePasswords[k]);
-        const hasLocalPreds = Object.keys(localPreds).some(k => !remotePreds[k]);
-        if (hasLocalPw || hasLocalPreds) {
+        const validPoolerSet = new Set((remotePoolers.length ? remotePoolers : DATA.poolers).map(p => p.name));
+        // Only consider names that are actually in the current poolers list AND have content.
+        // Ignore orphan keys (e.g. 'Étienne G_' produced when fromSafeKeys can't reverse-map
+        // a safe key that differs from any current pooler name). These orphans would otherwise
+        // trigger a dangerous full-overwrite of /predictions that wipes everyone's data.
+        const localOnlyPredNames = Object.keys(localPreds).filter(name => {
+          if (!validPoolerSet.has(name)) return false;
+          if (!localPreds[name]) return false;
+          if (remotePreds[name]) return false;
+          return true;
+        });
+        if (hasLocalPw || localOnlyPredNames.length) {
           suppressFirebaseWrite = false;
           if (hasLocalPw) { dbg('📤 Pushing local-only passwords to Firebase'); savePasswords(); }
-          if (hasLocalPreds) { dbg('📤 Pushing local-only predictions to Firebase'); fbSavePredictions(); }
+          // CRITICAL: write each pooler individually — never use fbSavePredictions() with no
+          // argument here, because that does a full `/predictions` overwrite that can wipe
+          // remote data when local has stale or orphaned keys.
+          for (const name of localOnlyPredNames) {
+            dbg(`📤 Pushing local-only predictions to Firebase for ${name}`);
+            fbWrite('predictions/' + fbSafeKey(name), localPreds[name]);
+          }
         }
         // Validate saved sessions against updated passwords
         if (typeof validateSavedSessions === 'function') validateSavedSessions();
@@ -1317,19 +1333,52 @@ async function fetchLiveNHLData() {
 }
 
 // ---- Combined: try prefetch first, then live API ----
+// Playoffs 2026 started on April 19 ET. Once we're past that date, if the
+// prefetched file still contains 100% regular-season data (because the
+// GitHub Actions workflow hasn't refreshed yet), treat it as stale and
+// prefer the live NHL API so the Classement page shows playoff stats.
+const PLAYOFFS_START_TS = new Date('2026-04-19T00:00:00-04:00').getTime();
+
+function isPrefetchStale(data) {
+  if (!data || !data.skaters?.length) return true;
+  if (Date.now() < PLAYOFFS_START_TS) return false;
+  // Once playoffs have started, prefetch is stale if EVERY skater is flagged
+  // regSeason (i.e. the source data was fetched before any playoff game
+  // finished populating the playoffs endpoint).
+  const anyPlayoff = data.skaters.some(s => s.regSeason === false);
+  if (anyPlayoff) return false;
+  // Also check age of the snapshot — if lastUpdate is before playoffs start,
+  // definitely stale.
+  if (data.lastUpdate) {
+    const updatedTs = Date.parse(data.lastUpdate);
+    if (!isNaN(updatedTs) && updatedTs < PLAYOFFS_START_TS) return true;
+  }
+  return true;
+}
+
 async function fetchAllNHLData() {
   // 1. Try pre-fetched data (nhl-data.json from GitHub Actions)
   const prefetched = await loadPrefetchedData();
-  if (prefetched && prefetched.skaters?.length) return prefetched;
+  const stale = isPrefetchStale(prefetched);
+  if (prefetched && prefetched.skaters?.length && !stale) return prefetched;
+  if (stale && prefetched) {
+    console.warn('⚠️ nhl-data.json est périmé (100% saison régulière alors que les séries ont commencé) — tentative live API');
+  }
 
   // 2. Try live API (works when CORS is allowed)
   try {
-    return await fetchLiveNHLData();
+    const live = await fetchLiveNHLData();
+    if (live && live.skaters?.length) return live;
   } catch(e) {
     console.warn('❌ Live API failed (CORS?):', e.message);
   }
 
-  // 3. Nothing worked
+  // 3. Fallback to stale prefetch rather than showing nothing
+  if (prefetched && prefetched.skaters?.length) {
+    console.warn('ℹ️ Live API indisponible — affichage des stats régulières en dernier recours');
+    return prefetched;
+  }
+
   console.error('❌ Aucune source de données NHL disponible');
   return { skaters: [], goalies: [], teams: [] };
 }
