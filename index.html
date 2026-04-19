@@ -188,7 +188,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v22</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v23</span>
   </div>
 </nav>
 
@@ -1582,10 +1582,18 @@ function updateDataStatus() {
   const dot = document.getElementById('status-dot');
   const statusEl = document.getElementById('data-status');
   const updateEl = document.getElementById('last-update');
+  // Defensive null checks — prior version crashed (uncaught TypeError) when
+  // the inner span got re-rendered without its id, which in turn killed the
+  // entire startup script and prevented refreshAll() from running.
+  if (!dot || !statusEl || !updateEl) return;
   if (DATA.nhlData.lastUpdate) {
     dot.classList.remove('offline');
     dot.classList.add('online');
-    statusEl.querySelector('span').innerHTML = `<span class="status-dot online"></span> Données NHL: chargées (${DATA.nhlData.skaters.length} joueurs)`;
+    const innerSpan = statusEl.querySelector('span');
+    // Keep id="status-dot" so subsequent getElementById calls still work.
+    if (innerSpan) {
+      innerSpan.innerHTML = `<span class="status-dot online" id="status-dot"></span> Données NHL: chargées (${DATA.nhlData.skaters.length} joueurs)`;
+    }
     updateEl.textContent = 'Dernière MAJ: ' + new Date(DATA.nhlData.lastUpdate).toLocaleString('fr-CA');
   }
 }
