@@ -188,7 +188,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v23</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v24</span>
   </div>
 </nav>
 
@@ -1240,6 +1240,78 @@ function nhlName(obj) {
   return obj.default || obj.fr || Object.values(obj)[0] || '';
 }
 
+// Helper: derive playoff W-L-GP per team from the NHL bracket. Used to fix
+// prefetched data whose `teams` array still shows 82-game regular-season
+// records (because the GitHub Actions snapshot predates the playoff-aware
+// Python script, or predates this round's results).
+function computePlayoffRecordFromBracket(bracket) {
+  const playoffRecord = {};
+  const bracketAbbrevs = [];
+  if (!bracket || !bracket.series) return { playoffRecord, bracketAbbrevs };
+  const seen = new Set();
+  for (const s of bracket.series) {
+    const topAb = s.topSeedTeam?.abbrev;
+    const botAb = s.bottomSeedTeam?.abbrev;
+    const topW = s.topSeedWins || 0;
+    const botW = s.bottomSeedWins || 0;
+    if (topAb) {
+      if (!seen.has(topAb)) { seen.add(topAb); bracketAbbrevs.push(topAb); }
+      const r = playoffRecord[topAb] || (playoffRecord[topAb] = { wins:0, losses:0, gp:0 });
+      r.wins += topW; r.losses += botW; r.gp += topW + botW;
+    }
+    if (botAb) {
+      if (!seen.has(botAb)) { seen.add(botAb); bracketAbbrevs.push(botAb); }
+      const r = playoffRecord[botAb] || (playoffRecord[botAb] = { wins:0, losses:0, gp:0 });
+      r.wins += botW; r.losses += topW; r.gp += topW + botW;
+    }
+  }
+  return { playoffRecord, bracketAbbrevs };
+}
+
+// Normalize a prefetched nhl-data.json snapshot so it is always safe to
+// display during playoffs, even if the GitHub Actions cron hasn't yet re-run
+// with the playoff-aware Python script:
+//   - Rebuild `teams` from the bracket so wins/losses/gp reflect PLAYOFF
+//     results, not 82-game regular-season totals.
+//   - For any skater/goalie flagged regSeason:true, zero the playing stats
+//     (they haven't played a playoff game yet; their regular-season numbers
+//     must NOT be counted in the pool).
+// Returns the same object with teams/skaters/goalies replaced in place.
+function normalizePrefetchForPlayoffs(data) {
+  if (!data) return data;
+  const { playoffRecord, bracketAbbrevs } = computePlayoffRecordFromBracket(data.bracket);
+  if (bracketAbbrevs.length) {
+    const nameByAbbrev = {};
+    for (const t of (data.teams || [])) {
+      if (t.abbrev) nameByAbbrev[t.abbrev] = t.name;
+    }
+    data.teams = bracketAbbrevs.map(ab => {
+      const rec = playoffRecord[ab] || { wins: 0, losses: 0, gp: 0 };
+      return { abbrev: ab, name: nameByAbbrev[ab] || ab, gp: rec.gp, wins: rec.wins, losses: rec.losses };
+    });
+  }
+  if (Array.isArray(data.skaters)) {
+    let zeroed = 0;
+    data.skaters = data.skaters.map(s => {
+      if (s && s.regSeason === true && ((s.points || 0) > 0 || (s.gp || 0) > 0)) {
+        zeroed++;
+        return { ...s, gp: 0, goals: 0, assists: 0, points: 0 };
+      }
+      return s;
+    });
+    if (zeroed) console.log(`🧹 Zéroté stats saison régulière pour ${zeroed} joueur(s) sans match de séries`);
+  }
+  if (Array.isArray(data.goalies)) {
+    data.goalies = data.goalies.map(g => {
+      if (g && g.regSeason === true && ((g.wins || 0) > 0 || (g.gp || 0) > 0)) {
+        return { ...g, gp: 0, wins: 0, losses: 0, shutouts: 0, savePct: 0, gaa: 0 };
+      }
+      return g;
+    });
+  }
+  return data;
+}
+
 // ---- Strategy 1: Load pre-fetched data ----
 // Supports both: nhl-data.js (local, via <script> tag → window.NHL_PREFETCH)
 //            and: nhl-data.json (GitHub Pages, via fetch)
@@ -1247,7 +1319,7 @@ async function loadPrefetchedData() {
   // Check local .js file first (loaded via <script src="nhl-data.js">)
   if (window.NHL_PREFETCH && window.NHL_PREFETCH.skaters?.length) {
     console.log(`✅ Données locales (nhl-data.js): ${window.NHL_PREFETCH.skaters.length} joueurs, ${window.NHL_PREFETCH.goalies?.length} gardiens`);
-    return window.NHL_PREFETCH;
+    return normalizePrefetchForPlayoffs(window.NHL_PREFETCH);
   }
   // Try fetching nhl-data.json (GitHub Pages)
   try {
@@ -1256,7 +1328,7 @@ async function loadPrefetchedData() {
     const data = await res.json();
     if (data.skaters?.length) {
       console.log(`✅ Données GitHub (nhl-data.json): ${data.skaters.length} joueurs, ${data.goalies?.length} gardiens (MAJ: ${data.lastUpdate})`);
-      return data;
+      return normalizePrefetchForPlayoffs(data);
     }
   } catch(e) {
     console.log('ℹ️ nhl-data.json non disponible:', e.message);
@@ -1265,10 +1337,24 @@ async function loadPrefetchedData() {
 }
 
 // ---- Strategy 2: Live API fetch (works when served from same origin / CORS OK) ----
+// Wrap fetch with a hard timeout so Promise.all over all 16 teams can't hang
+// forever on a single stuck request (this was silently preventing the live
+// fallback from ever completing, so team records stayed on the stale
+// prefetched 82-game totals).
+async function fetchWithTimeout(url, ms = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchClubStats(abbrev, gameType) {
   try {
     const url = `${NHL_API}/club-stats/${abbrev}/${NHL_SEASON}/${gameType}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, 8000);
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
@@ -1276,7 +1362,7 @@ async function fetchClubStats(abbrev, gameType) {
 
 async function fetchLiveNHLData() {
   console.log('🏒 Tentative fetch live NHL API...');
-  const standRes = await fetch(`${NHL_API}/standings/now`);
+  const standRes = await fetchWithTimeout(`${NHL_API}/standings/now`, 8000);
   if (!standRes.ok) throw new Error(`Standings HTTP ${standRes.status}`);
   const standJson = await standRes.json();
   const allTeams = (standJson.standings || []).map(t => ({
@@ -1288,28 +1374,7 @@ async function fetchLiveNHLData() {
   // Try to use the bracket for the 16 playoff teams AND their playoff wins.
   let bracketData = null;
   try { bracketData = await fetchNHLBracket(); } catch {}
-
-  const playoffRecord = {}; // abbrev -> { wins, losses, gp }
-  const bracketAbbrevs = [];
-  if (bracketData && bracketData.series) {
-    const seen = new Set();
-    for (const s of bracketData.series) {
-      const topAb = s.topSeedTeam?.abbrev;
-      const botAb = s.bottomSeedTeam?.abbrev;
-      const topW = s.topSeedWins || 0;
-      const botW = s.bottomSeedWins || 0;
-      if (topAb) {
-        if (!seen.has(topAb)) { seen.add(topAb); bracketAbbrevs.push(topAb); }
-        const r = playoffRecord[topAb] || (playoffRecord[topAb] = { wins:0, losses:0, gp:0 });
-        r.wins += topW; r.losses += botW; r.gp += topW + botW;
-      }
-      if (botAb) {
-        if (!seen.has(botAb)) { seen.add(botAb); bracketAbbrevs.push(botAb); }
-        const r = playoffRecord[botAb] || (playoffRecord[botAb] = { wins:0, losses:0, gp:0 });
-        r.wins += botW; r.losses += topW; r.gp += topW + botW;
-      }
-    }
-  }
+  const { playoffRecord, bracketAbbrevs } = computePlayoffRecordFromBracket(bracketData);
 
   const teamNameByAbbrev = Object.fromEntries(allTeams.map(t => [t.abbrev, t.name]));
   // If bracket gave us the 16 teams, use those. Otherwise fall back to
@@ -1385,30 +1450,16 @@ function isPrefetchStale(data) {
   if (!data || !data.skaters?.length) return true;
   if (Date.now() < PLAYOFFS_START_TS) return false;
 
-  // Stale if prefetch was produced before playoffs started.
-  if (data.lastUpdate) {
-    const updatedTs = Date.parse(data.lastUpdate);
-    if (!isNaN(updatedTs) && updatedTs < PLAYOFFS_START_TS) return true;
-  }
-
-  // Stale if every skater is regSeason (prefetch was built before any
-  // playoff game finished populating the playoffs endpoint).
+  // After normalizePrefetchForPlayoffs has run, any regular-season-leaking
+  // stats have been zeroed and the `teams` array has been rebuilt from the
+  // bracket — so 82 GP teams and non-zero regSeason skaters should never
+  // appear here. The only signal we still care about is "has the prefetch
+  // captured any actual playoff game data yet?" — if not, we want to try
+  // the live API for fresher numbers. But we do NOT treat the normalized
+  // snapshot as so stale that we'd rather show nothing; the normalized
+  // version is always safe to use as a last resort.
   const anyPlayoff = data.skaters.some(s => s.regSeason === false);
   if (!anyPlayoff) return true;
-
-  // Stale if the prefetch still contains the OLD-FORMAT data where a
-  // regSeason-flagged skater has non-zero stats (under the new format
-  // that started in v22, regSeason:true means "no playoff game yet" and
-  // stats must all be zero). A regSeason:true skater with points>0 is
-  // proof the snapshot is pre-v22 and should be ignored.
-  const hasOldFormatRegSeasonStats = data.skaters.some(s => s.regSeason === true && (s.points || 0) > 0);
-  if (hasOldFormatRegSeasonStats) return true;
-
-  // Stale if any team has regular-season-sized gamesPlayed (playoffs
-  // max out at 28 games per team if they reach final, but even that
-  // is an exaggeration; >10 during early playoffs is definitely reg
-  // season data leaking through).
-  if ((data.teams || []).some(t => (t.gp || 0) > 10)) return true;
 
   return false;
 }
