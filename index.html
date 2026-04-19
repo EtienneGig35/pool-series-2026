@@ -188,7 +188,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v21</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v22</span>
   </div>
 </nav>
 
@@ -1282,54 +1282,96 @@ async function fetchLiveNHLData() {
   const allTeams = (standJson.standings || []).map(t => ({
     abbrev: nhlName(t.teamAbbrev) || t.teamAbbrev,
     name: `${nhlName(t.placeName)} ${nhlName(t.teamCommonName)}`.trim(),
-    wins: t.wins, losses: t.losses, gp: t.gamesPlayed, pts: t.points
+    pts: t.points
   })).sort((a, b) => b.pts - a.pts);
 
-  const playoffTeams = allTeams.slice(0, 16);
-  console.log(`✅ ${allTeams.length} équipes, top 16: ${playoffTeams.map(t=>t.abbrev).join(',')}`);
+  // Try to use the bracket for the 16 playoff teams AND their playoff wins.
+  let bracketData = null;
+  try { bracketData = await fetchNHLBracket(); } catch {}
 
+  const playoffRecord = {}; // abbrev -> { wins, losses, gp }
+  const bracketAbbrevs = [];
+  if (bracketData && bracketData.series) {
+    const seen = new Set();
+    for (const s of bracketData.series) {
+      const topAb = s.topSeedTeam?.abbrev;
+      const botAb = s.bottomSeedTeam?.abbrev;
+      const topW = s.topSeedWins || 0;
+      const botW = s.bottomSeedWins || 0;
+      if (topAb) {
+        if (!seen.has(topAb)) { seen.add(topAb); bracketAbbrevs.push(topAb); }
+        const r = playoffRecord[topAb] || (playoffRecord[topAb] = { wins:0, losses:0, gp:0 });
+        r.wins += topW; r.losses += botW; r.gp += topW + botW;
+      }
+      if (botAb) {
+        if (!seen.has(botAb)) { seen.add(botAb); bracketAbbrevs.push(botAb); }
+        const r = playoffRecord[botAb] || (playoffRecord[botAb] = { wins:0, losses:0, gp:0 });
+        r.wins += botW; r.losses += topW; r.gp += topW + botW;
+      }
+    }
+  }
+
+  const teamNameByAbbrev = Object.fromEntries(allTeams.map(t => [t.abbrev, t.name]));
+  // If bracket gave us the 16 teams, use those. Otherwise fall back to
+  // top-16 by regular-season points (pre-bracket period).
+  const playoffTeams = bracketAbbrevs.length
+    ? bracketAbbrevs.map(ab => ({ abbrev: ab, name: teamNameByAbbrev[ab] || ab }))
+    : allTeams.slice(0, 16).map(t => ({ abbrev: t.abbrev, name: t.name }));
+  console.log(`✅ ${allTeams.length} équipes, séries: ${playoffTeams.map(t=>t.abbrev).join(',')}`);
+
+  // For each team, try playoff stats first; if empty, fall back to regular
+  // season roster but ZERO the stats so drafted players don't get credited
+  // with 82-game totals before their team has even played a playoff game.
   const clubResults = await Promise.all(
     playoffTeams.map(async (team) => {
-      let stats = await fetchClubStats(team.abbrev, 3);
-      let isPlayoff = true;
-      if (!stats || (!stats.skaters?.length && !stats.goalies?.length)) {
-        stats = await fetchClubStats(team.abbrev, 2);
-        isPlayoff = false;
-      }
-      return { team, stats, isPlayoff };
+      const playoffStats = await fetchClubStats(team.abbrev, 3);
+      const hasPlayoff = !!(playoffStats && (playoffStats.skaters?.length || playoffStats.goalies?.length));
+      if (hasPlayoff) return { team, stats: playoffStats, hasPlayoff: true };
+      const regStats = await fetchClubStats(team.abbrev, 2);
+      return { team, stats: regStats, hasPlayoff: false };
     })
   );
 
   const skaters = [], goalies = [];
-  for (const { team, stats, isPlayoff } of clubResults) {
+  for (const { team, stats, hasPlayoff } of clubResults) {
     if (!stats) continue;
     for (const p of (stats.skaters || [])) {
       skaters.push({
         name: `${nhlName(p.firstName)} ${nhlName(p.lastName)}`.trim(),
         team: team.abbrev, pos: p.positionCode || 'C',
-        gp: p.gamesPlayed || 0, goals: p.goals || 0,
-        assists: p.assists || 0, points: p.points || 0,
+        gp: hasPlayoff ? (p.gamesPlayed || 0) : 0,
+        goals: hasPlayoff ? (p.goals || 0) : 0,
+        assists: hasPlayoff ? (p.assists || 0) : 0,
+        points: hasPlayoff ? (p.points || 0) : 0,
         headshot: p.headshot || '',
-        regSeason: !isPlayoff
+        regSeason: !hasPlayoff
       });
     }
     for (const g of (stats.goalies || [])) {
       goalies.push({
         name: `${nhlName(g.firstName)} ${nhlName(g.lastName)}`.trim(),
-        team: team.abbrev, gp: g.gamesPlayed || 0,
-        wins: g.wins || 0, losses: g.losses || 0, shutouts: g.shutouts || 0,
-        savePct: g.savePercentage || 0, gaa: g.goalsAgainstAverage || 0,
+        team: team.abbrev,
+        gp: hasPlayoff ? (g.gamesPlayed || 0) : 0,
+        wins: hasPlayoff ? (g.wins || 0) : 0,
+        losses: hasPlayoff ? (g.losses || 0) : 0,
+        shutouts: hasPlayoff ? (g.shutouts || 0) : 0,
+        savePct: hasPlayoff ? (g.savePercentage || 0) : 0,
+        gaa: hasPlayoff ? (g.goalsAgainstAverage || 0) : 0,
         headshot: g.headshot || '',
-        regSeason: !isPlayoff
+        regSeason: !hasPlayoff
       });
     }
   }
 
   skaters.sort((a, b) => b.points - a.points);
   goalies.sort((a, b) => b.wins - a.wins);
-  const teams = playoffTeams.map(t => ({ name: t.name, abbrev: t.abbrev, gp: t.gp, wins: t.wins, losses: t.losses }));
+  // Teams: playoff W-L-GP from the bracket (NOT regular-season 82-game totals).
+  const teams = playoffTeams.map(t => {
+    const rec = playoffRecord[t.abbrev] || { wins: 0, losses: 0, gp: 0 };
+    return { name: t.name, abbrev: t.abbrev, gp: rec.gp, wins: rec.wins, losses: rec.losses };
+  });
   console.log(`✅ Live: ${skaters.length} joueurs, ${goalies.length} gardiens, ${teams.length} équipes`);
-  return { skaters, goalies, teams };
+  return { skaters, goalies, teams, bracket: bracketData };
 }
 
 // ---- Combined: try prefetch first, then live API ----
@@ -1342,18 +1384,33 @@ const PLAYOFFS_START_TS = new Date('2026-04-19T00:00:00-04:00').getTime();
 function isPrefetchStale(data) {
   if (!data || !data.skaters?.length) return true;
   if (Date.now() < PLAYOFFS_START_TS) return false;
-  // Once playoffs have started, prefetch is stale if EVERY skater is flagged
-  // regSeason (i.e. the source data was fetched before any playoff game
-  // finished populating the playoffs endpoint).
-  const anyPlayoff = data.skaters.some(s => s.regSeason === false);
-  if (anyPlayoff) return false;
-  // Also check age of the snapshot — if lastUpdate is before playoffs start,
-  // definitely stale.
+
+  // Stale if prefetch was produced before playoffs started.
   if (data.lastUpdate) {
     const updatedTs = Date.parse(data.lastUpdate);
     if (!isNaN(updatedTs) && updatedTs < PLAYOFFS_START_TS) return true;
   }
-  return true;
+
+  // Stale if every skater is regSeason (prefetch was built before any
+  // playoff game finished populating the playoffs endpoint).
+  const anyPlayoff = data.skaters.some(s => s.regSeason === false);
+  if (!anyPlayoff) return true;
+
+  // Stale if the prefetch still contains the OLD-FORMAT data where a
+  // regSeason-flagged skater has non-zero stats (under the new format
+  // that started in v22, regSeason:true means "no playoff game yet" and
+  // stats must all be zero). A regSeason:true skater with points>0 is
+  // proof the snapshot is pre-v22 and should be ignored.
+  const hasOldFormatRegSeasonStats = data.skaters.some(s => s.regSeason === true && (s.points || 0) > 0);
+  if (hasOldFormatRegSeasonStats) return true;
+
+  // Stale if any team has regular-season-sized gamesPlayed (playoffs
+  // max out at 28 games per team if they reach final, but even that
+  // is an exaggeration; >10 during early playoffs is definitely reg
+  // season data leaking through).
+  if ((data.teams || []).some(t => (t.gp || 0) > 10)) return true;
+
+  return false;
 }
 
 async function fetchAllNHLData() {
