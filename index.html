@@ -188,7 +188,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v24</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v25</span>
   </div>
 </nav>
 
@@ -1384,46 +1384,85 @@ async function fetchLiveNHLData() {
     : allTeams.slice(0, 16).map(t => ({ abbrev: t.abbrev, name: t.name }));
   console.log(`✅ ${allTeams.length} équipes, séries: ${playoffTeams.map(t=>t.abbrev).join(',')}`);
 
-  // For each team, try playoff stats first; if empty, fall back to regular
-  // season roster but ZERO the stats so drafted players don't get credited
-  // with 82-game totals before their team has even played a playoff game.
+  // For each team, fetch BOTH playoff (gameType=3) and regular-season
+  // (gameType=2) stats, then union: playoff entries keep their real stats,
+  // and any regular-season-only player (e.g. a DAL skater who didn't dress
+  // in game 1 of round 1) is added with zeroed stats so they still appear
+  // with team logo and headshot. As soon as they play a playoff game, they
+  // move over to the playoff bucket on the next fetch.
   const clubResults = await Promise.all(
     playoffTeams.map(async (team) => {
-      const playoffStats = await fetchClubStats(team.abbrev, 3);
-      const hasPlayoff = !!(playoffStats && (playoffStats.skaters?.length || playoffStats.goalies?.length));
-      if (hasPlayoff) return { team, stats: playoffStats, hasPlayoff: true };
-      const regStats = await fetchClubStats(team.abbrev, 2);
-      return { team, stats: regStats, hasPlayoff: false };
+      const [playoffStats, regStats] = await Promise.all([
+        fetchClubStats(team.abbrev, 3),
+        fetchClubStats(team.abbrev, 2),
+      ]);
+      return { team, playoffStats, regStats };
     })
   );
 
+  // Headshot URL embeds NHL playerId → most reliable uniqueness key.
+  // Fall back to name+position if headshot is missing.
+  const playerKey = (p) =>
+    (p.headshot || '') ||
+    `${nhlName(p.firstName).toLowerCase()}|${nhlName(p.lastName).toLowerCase()}|${p.positionCode||''}`;
+
   const skaters = [], goalies = [];
-  for (const { team, stats, hasPlayoff } of clubResults) {
-    if (!stats) continue;
-    for (const p of (stats.skaters || [])) {
+  for (const { team, playoffStats, regStats } of clubResults) {
+    const playoffSkaters = (playoffStats && playoffStats.skaters) || [];
+    const regSkaters = (regStats && regStats.skaters) || [];
+    const playoffGoalies = (playoffStats && playoffStats.goalies) || [];
+    const regGoalies = (regStats && regStats.goalies) || [];
+    if (!playoffSkaters.length && !regSkaters.length && !playoffGoalies.length && !regGoalies.length) continue;
+
+    const playedSk = new Set();
+    for (const p of playoffSkaters) {
+      playedSk.add(playerKey(p));
       skaters.push({
         name: `${nhlName(p.firstName)} ${nhlName(p.lastName)}`.trim(),
         team: team.abbrev, pos: p.positionCode || 'C',
-        gp: hasPlayoff ? (p.gamesPlayed || 0) : 0,
-        goals: hasPlayoff ? (p.goals || 0) : 0,
-        assists: hasPlayoff ? (p.assists || 0) : 0,
-        points: hasPlayoff ? (p.points || 0) : 0,
+        gp: p.gamesPlayed || 0,
+        goals: p.goals || 0,
+        assists: p.assists || 0,
+        points: p.points || 0,
         headshot: p.headshot || '',
-        regSeason: !hasPlayoff
+        regSeason: false
       });
     }
-    for (const g of (stats.goalies || [])) {
+    for (const p of regSkaters) {
+      if (playedSk.has(playerKey(p))) continue;
+      skaters.push({
+        name: `${nhlName(p.firstName)} ${nhlName(p.lastName)}`.trim(),
+        team: team.abbrev, pos: p.positionCode || 'C',
+        gp: 0, goals: 0, assists: 0, points: 0,
+        headshot: p.headshot || '',
+        regSeason: true
+      });
+    }
+
+    const playedGo = new Set();
+    for (const g of playoffGoalies) {
+      playedGo.add(playerKey(g));
       goalies.push({
         name: `${nhlName(g.firstName)} ${nhlName(g.lastName)}`.trim(),
         team: team.abbrev,
-        gp: hasPlayoff ? (g.gamesPlayed || 0) : 0,
-        wins: hasPlayoff ? (g.wins || 0) : 0,
-        losses: hasPlayoff ? (g.losses || 0) : 0,
-        shutouts: hasPlayoff ? (g.shutouts || 0) : 0,
-        savePct: hasPlayoff ? (g.savePercentage || 0) : 0,
-        gaa: hasPlayoff ? (g.goalsAgainstAverage || 0) : 0,
+        gp: g.gamesPlayed || 0,
+        wins: g.wins || 0,
+        losses: g.losses || 0,
+        shutouts: g.shutouts || 0,
+        savePct: g.savePercentage || 0,
+        gaa: g.goalsAgainstAverage || 0,
         headshot: g.headshot || '',
-        regSeason: !hasPlayoff
+        regSeason: false
+      });
+    }
+    for (const g of regGoalies) {
+      if (playedGo.has(playerKey(g))) continue;
+      goalies.push({
+        name: `${nhlName(g.firstName)} ${nhlName(g.lastName)}`.trim(),
+        team: team.abbrev,
+        gp: 0, wins: 0, losses: 0, shutouts: 0, savePct: 0, gaa: 0,
+        headshot: g.headshot || '',
+        regSeason: true
       });
     }
   }
