@@ -109,11 +109,27 @@ input::placeholder { color: var(--text2); }
 .search-item .team { color: var(--text2); font-size: 12px; }
 .search-item.taken { opacity: .35; pointer-events: none; }
 
-/* PREDICTIONS */
+/* PREDICTIONS - input form */
 .pred-round { margin-bottom: 20px; }
 .pred-series { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .pred-series:last-child { border-bottom: none; }
 .pred-series label { min-width: 220px; font-size: 14px; }
+
+/* PREDICTIONS - read-only view in Détails Poolers */
+.pred-round-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 14px 0 6px; }
+.pred-round-header strong { color: var(--text); font-size: 14px; }
+.pred-round-header .round-total { font-size: 12px; color: var(--text2); }
+.pred-list { display: flex; flex-direction: column; }
+.pred-row { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-top: 1px solid var(--border); font-size: 13px; }
+.pred-row:first-child { border-top: none; }
+.pred-row img { width: 18px; height: 18px; flex-shrink: 0; }
+.pred-row .pred-matchup { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.pred-row .pred-pick { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.pred-row .pred-pick .pick-text { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pred-row .pred-pts { flex-shrink: 0; }
+.pred-row .pred-finale-label { font-size: 11px; color: var(--text2); flex-shrink: 0; min-width: 78px; }
+.pred-grand-total { display: flex; justify-content: space-between; align-items: center; padding: 10px 2px 0; border-top: 2px solid var(--border); margin-top: 10px; font-weight: 700; font-size: 14px; }
+.badge-grey { background: rgba(160,160,160,.15); color: var(--text2); }
 
 /* TABS */
 .tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -188,7 +204,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v25</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v26</span>
   </div>
 </nav>
 
@@ -1731,25 +1747,41 @@ function calcTeamPoints(poolerName) {
   return 2 * found.wins;
 }
 
-function calcPredictionPoints(poolerName) {
+// Compute points for a single round prediction:
+//   right team + right number of games = 5
+//   right team + wrong number of games = 3
+//   wrong team but both predicted "en 7" and series went 7 = 1
+//   anything else = 0
+//   returns null when the result is not yet known (series in progress)
+function predictionPoints(pred, result) {
+  if (!pred || !pred.winner || !result || !result.winner) return null;
+  if (norm(pred.winner) === norm(result.winner)) {
+    return (pred.games == result.games) ? 5 : 3;
+  }
+  if (result.games == 7 && pred.games == 7) return 1;
+  return 0;
+}
+
+function calcPredictionPointsByRound(poolerName) {
+  const out = { rounds: { 1:0, 2:0, 3:0, 4:0 }, total: 0 };
   const preds = DATA.predictions[poolerName];
-  if (!preds || !preds.rounds) return 0;
-  let total = 0;
+  if (!preds || !preds.rounds) return out;
   for (const roundNum of [1,2,3,4]) {
     const roundPreds = preds.rounds[roundNum] || [];
     const roundResults = DATA.results[roundNum] || [];
+    let roundTotal = 0;
     for (let i = 0; i < roundPreds.length; i++) {
-      const pred = roundPreds[i];
-      const result = roundResults[i];
-      if (!pred || !result || !result.winner) continue;
-      if (norm(pred.winner) === norm(result.winner)) {
-        total += (pred.games == result.games) ? 5 : 3;
-      } else if (result.games == 7 && pred.games == 7) {
-        total += 1;
-      }
+      const pts = predictionPoints(roundPreds[i], roundResults[i]);
+      if (pts != null) roundTotal += pts;
     }
+    out.rounds[roundNum] = roundTotal;
+    out.total += roundTotal;
   }
-  return total;
+  return out;
+}
+
+function calcPredictionPoints(poolerName) {
+  return calcPredictionPointsByRound(poolerName).total;
 }
 
 function calcFinaleBonus(poolerName) {
@@ -2953,7 +2985,7 @@ function renderPoolerDetail() {
     const goalieElim = isPlayerEliminated(picks.goalie, eliminated);
     const gStyle = goalieElim ? `style="${elimStyle}"` : '';
     const gBadge = goalieElim ? ' <span class="badge badge-red">Éliminé</span>' : '';
-    html += `<div class="card"><h3>Gardien</h3><table><thead><tr><th>Nom</th><th>Équipe</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">BL</th><th style="text-align:right">Pts Pool</th></tr></thead><tbody>
+    html += `<div class="card"><h3>Gardien</h3><table><thead><tr><th>Nom</th><th>Équipe</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">BL</th><th style="text-align:right">Pts</th></tr></thead><tbody>
       <tr ${gStyle}>
         <td><div class="player-cell">${headshotImg(g?.headshot)}<span>${picks.goalie}${gBadge}</span></div></td>
         <td><div class="team-cell">${teamLogoImg(g?.team)}<span>${g?.team||'—'}</span></div></td>
@@ -2967,7 +2999,7 @@ function renderPoolerDetail() {
     const teamElim = isTeamEliminated(picks.team, eliminated);
     const tStyle = teamElim ? `style="${elimStyle}"` : '';
     const tBadge = teamElim ? ' <span class="badge badge-red">Éliminée</span>' : '';
-    html += `<div class="card"><h3>Équipe</h3><table><thead><tr><th>Nom</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">D</th><th style="text-align:right">Pts Pool</th></tr></thead><tbody>
+    html += `<div class="card"><h3>Équipe</h3><table><thead><tr><th>Nom</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">D</th><th style="text-align:right">Pts</th></tr></thead><tbody>
       <tr ${tStyle}>
         <td><div class="player-cell">${teamLogoImg(t?.abbrev, 'team-logo-lg')}<span>${picks.team}${tBadge}</span></div></td>
         <td style="text-align:right">${t?.gp||0}</td><td style="text-align:right">${t?.wins||0}</td><td style="text-align:right">${t?.losses||0}</td><td style="text-align:right;font-weight:700">${teamPts}</td></tr>
@@ -2976,20 +3008,68 @@ function renderPoolerDetail() {
 
   // Predictions — only show sections whose deadline has passed
   const preds = DATA.predictions[poolerName];
-  html += '<div class="card"><h3>Prédictions</h3>';
+  const predBreakdown = calcPredictionPointsByRound(poolerName);
+  const grandTotalPts = predBreakdown.total + bonusPts;
+
+  // Helpers for the prediction view
+  const teamAbbrevByName = (n) => {
+    if (!n) return '';
+    const t = DATA.nhlData.teams.find(tm => norm(tm.name) === norm(n));
+    return t?.abbrev || '';
+  };
+  const tinyLogo = (abbrev) => abbrev
+    ? `<img src="${teamLogoUrl(abbrev)}" onerror="this.style.display='none'" loading="lazy">`
+    : '';
+  const ptsBadge = (pts) => {
+    if (pts == null) return '<span class="badge badge-grey">—</span>';
+    if (pts === 5) return '<span class="badge badge-green">5 pts</span>';
+    if (pts === 3) return '<span class="badge badge-blue">3 pts</span>';
+    if (pts === 1) return '<span class="badge badge-blue">1 pt</span>';
+    if (pts === 10) return '<span class="badge badge-green">10 pts</span>';
+    return '<span class="badge badge-red">0 pt</span>';
+  };
+  const pluralPts = (n) => `${n} pt${n === 1 || n === -1 ? '' : 's'}`;
+
+  html += '<div class="card">';
+  html += `<div class="pred-round-header" style="margin:0 0 4px;border-bottom:1px solid var(--border);padding-bottom:8px">
+    <h3 style="margin:0">Prédictions</h3>
+    <span class="badge badge-blue" style="font-size:13px">Total: ${pluralPts(grandTotalPts)}</span>
+  </div>`;
 
   if (!preds) {
-    html += '<p style="color:var(--text2);font-size:13px">Aucune prédiction enregistrée.</p>';
+    html += '<p style="color:var(--text2);font-size:13px;margin-top:10px">Aucune prédiction enregistrée.</p>';
   } else {
     // Finale predictions
     if (isDeadlinePassed('finale')) {
       const res = DATA.finaleResults;
-      const champIcon = res.champion ? (norm(preds.champion) === norm(res.champion) ? '<span class="badge badge-green">10 pts</span>' : '<span class="badge badge-red">0 pt</span>') : '';
-      const finIcon = res.finalist ? (norm(preds.finalist) === norm(res.finalist) ? '<span class="badge badge-green">5 pts</span>' : '<span class="badge badge-red">0 pt</span>') : '';
-      const csIcon = res.connSmythe ? (norm(preds.connSmythe) === norm(res.connSmythe) ? '<span class="badge badge-green">5 pts</span>' : '<span class="badge badge-red">0 pt</span>') : '';
-      html += `<p style="margin-bottom:8px"><strong>Finale:</strong> Champion: ${preds.champion||'—'} ${champIcon}, Finaliste: ${preds.finalist||'—'} ${finIcon}, Conn Smythe: ${preds.connSmythe||'—'} ${csIcon}</p>`;
+      const champPts = res.champion ? (norm(preds.champion) === norm(res.champion) ? 10 : 0) : null;
+      const finPts = res.finalist ? (norm(preds.finalist) === norm(res.finalist) ? 5 : 0) : null;
+      const csPts = res.connSmythe ? (norm(preds.connSmythe) === norm(res.connSmythe) ? 5 : 0) : null;
+      html += `
+        <div class="pred-round-header">
+          <strong>Finale</strong>
+          <span class="round-total">Total: ${pluralPts(bonusPts)}</span>
+        </div>
+        <div class="pred-list">
+          <div class="pred-row">
+            <span class="pred-finale-label">Champion</span>
+            <span class="pred-pick">${tinyLogo(teamAbbrevByName(preds.champion))}<span class="pick-text">${preds.champion || '—'}</span></span>
+            <span class="pred-pts">${ptsBadge(champPts)}</span>
+          </div>
+          <div class="pred-row">
+            <span class="pred-finale-label">Finaliste</span>
+            <span class="pred-pick">${tinyLogo(teamAbbrevByName(preds.finalist))}<span class="pick-text">${preds.finalist || '—'}</span></span>
+            <span class="pred-pts">${ptsBadge(finPts)}</span>
+          </div>
+          <div class="pred-row">
+            <span class="pred-finale-label">Conn Smythe</span>
+            <span class="pred-pick"><span class="pick-text">${preds.connSmythe || '—'}</span></span>
+            <span class="pred-pts">${ptsBadge(csPts)}</span>
+          </div>
+        </div>
+      `;
     } else {
-      html += '<p style="color:var(--text2);font-size:13px;margin-bottom:8px">Prédictions de la finale: <span class="badge deadline-open">visibles après l\'échéance</span></p>';
+      html += `<p style="color:var(--text2);font-size:13px;margin-top:10px"><strong>Finale:</strong> <span class="badge deadline-open">visible après l'échéance</span></p>`;
     }
 
     // Round predictions
@@ -2997,23 +3077,35 @@ function renderPoolerDetail() {
       const rp = preds.rounds?.[rn] || [];
       if (!rp.length) continue;
       if (!isDeadlinePassed(rn)) {
-        html += `<p style="margin-top:8px;color:var(--text2);font-size:13px">${ROUND_LABELS[rn]}: <span class="badge deadline-open">visibles après l'échéance</span></p>`;
+        html += `<p style="color:var(--text2);font-size:13px;margin-top:10px"><strong>${ROUND_LABELS[rn]}:</strong> <span class="badge deadline-open">visibles après l'échéance</span></p>`;
         continue;
       }
-      html += `<p style="margin-top:8px;font-weight:600">${ROUND_LABELS[rn]}:</p>`;
+      const roundTotal = predBreakdown.rounds[rn] || 0;
+      html += `
+        <div class="pred-round-header">
+          <strong>${ROUND_LABELS[rn]}</strong>
+          <span class="round-total">Total: ${pluralPts(roundTotal)}</span>
+        </div>
+        <div class="pred-list">
+      `;
       rp.forEach((p, idx) => {
         if (!p.winner) return;
         const result = (DATA.results[rn] || [])[idx];
-        let icon = '';
-        if (result?.winner) {
-          if (norm(p.winner) === norm(result.winner)) {
-            icon = p.games == result.games ? '<span class="badge badge-green">3 pts</span>' : '<span class="badge badge-blue">1 pt</span>';
-          } else {
-            icon = '<span class="badge badge-red">0 pt</span>';
-          }
-        }
-        html += `<p style="font-size:13px;color:var(--text2);margin-left:12px">${p.series}: ${p.winner} en ${p.games} ${icon}</p>`;
+        const pts = predictionPoints(p, result);
+        const teams = (p.series || '').split(/\s+vs\s+/i).map(t => t.trim());
+        const ab1 = teamAbbrevByName(teams[0] || '');
+        const ab2 = teamAbbrevByName(teams[1] || '');
+        const winnerAb = teamAbbrevByName(p.winner);
+        const winnerLabel = winnerAb || p.winner;
+        html += `
+          <div class="pred-row">
+            <span class="pred-matchup">${tinyLogo(ab1)}${tinyLogo(ab2)}</span>
+            <span class="pred-pick">${tinyLogo(winnerAb)}<span class="pick-text">${winnerLabel} en ${p.games}</span></span>
+            <span class="pred-pts">${ptsBadge(pts)}</span>
+          </div>
+        `;
       });
+      html += '</div>';
     }
   }
   html += '</div>';
