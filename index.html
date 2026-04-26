@@ -204,7 +204,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v26</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v27</span>
   </div>
 </nav>
 
@@ -1755,7 +1755,7 @@ function calcTeamPoints(poolerName) {
 //   returns null when the result is not yet known (series in progress)
 function predictionPoints(pred, result) {
   if (!pred || !pred.winner || !result || !result.winner) return null;
-  if (norm(pred.winner) === norm(result.winner)) {
+  if (sameTeam(pred.winner, result.winner)) {
     return (pred.games == result.games) ? 5 : 3;
   }
   if (result.games == 7 && pred.games == 7) return 1;
@@ -1789,15 +1789,127 @@ function calcFinaleBonus(poolerName) {
   if (!preds) return 0;
   const res = DATA.finaleResults;
   let total = 0;
-  if (res.champion && norm(preds.champion) === norm(res.champion)) total += 10;
-  if (res.finalist && norm(preds.finalist) === norm(res.finalist)) total += 5;
-  if (res.connSmythe && norm(preds.connSmythe) === norm(res.connSmythe)) total += 5;
+  if (res.champion && sameTeam(preds.champion, res.champion)) total += 10;
+  if (res.finalist && sameTeam(preds.finalist, res.finalist)) total += 5;
+  if (res.connSmythe && samePlayer(preds.connSmythe, res.connSmythe)) total += 5;
   return total;
 }
 
 function norm(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
 function normLoose(s) { return norm(s).replace(/[^a-z0-9 ]/g, '').replace(/\s+/g,' ').trim(); }
 function isAdmin(name) { return name && normLoose(name) === normLoose(DATA.adminPooler); }
+
+// Common team aliases (lowercase, accent-stripped) → NHL abbreviation. Used to
+// resolve hand-typed predictions like "Carolina", "Habs", "Avs", "Tampa" so
+// that logos appear in Détails Poolers and points get computed against the
+// canonical team name from DATA.nhlData.teams.
+const TEAM_ALIASES = {
+  'habs': 'MTL', 'canadiens': 'MTL', 'montreal': 'MTL', 'mtl': 'MTL',
+  'sens': 'OTT', 'senators': 'OTT', 'ottawa': 'OTT', 'ott': 'OTT',
+  'avs': 'COL', 'avalanche': 'COL', 'colorado': 'COL', 'col': 'COL',
+  'bolts': 'TBL', 'lightning': 'TBL', 'tampa': 'TBL', 'tampa bay': 'TBL', 'tbl': 'TBL', 'tb': 'TBL',
+  'canes': 'CAR', 'hurricanes': 'CAR', 'carolina': 'CAR', 'car': 'CAR',
+  'oilers': 'EDM', 'edmonton': 'EDM', 'edm': 'EDM',
+  'wild': 'MIN', 'minnesota': 'MIN', 'min': 'MIN',
+  'stars': 'DAL', 'dallas': 'DAL', 'dal': 'DAL',
+  'kings': 'LAK', 'los angeles': 'LAK', 'la': 'LAK', 'la kings': 'LAK', 'lak': 'LAK',
+  'flyers': 'PHI', 'philadelphia': 'PHI', 'philly': 'PHI', 'phi': 'PHI',
+  'penguins': 'PIT', 'pens': 'PIT', 'pittsburgh': 'PIT', 'pit': 'PIT',
+  'sabres': 'BUF', 'buffalo': 'BUF', 'buf': 'BUF',
+  'bruins': 'BOS', 'boston': 'BOS', 'bos': 'BOS',
+  'knights': 'VGK', 'golden knights': 'VGK', 'vegas': 'VGK', 'vegas golden knights': 'VGK', 'vgk': 'VGK',
+  'mammoth': 'UTA', 'utah': 'UTA', 'utah mammoth': 'UTA', 'uta': 'UTA',
+  'ducks': 'ANA', 'anaheim': 'ANA', 'ana': 'ANA',
+};
+
+// Fuzzy team lookup. Returns a team object {name, abbrev, ...} from
+// DATA.nhlData.teams or null. Tries: exact name, exact abbrev, alias map,
+// last-word match (e.g. "Hurricanes"), substring overlap.
+function findTeamFlexible(input) {
+  if (!input) return null;
+  const teams = DATA.nhlData?.teams || [];
+  if (!teams.length) return null;
+  const ni = norm(input);
+  if (!ni) return null;
+  // 1. Exact name
+  let t = teams.find(tm => norm(tm.name) === ni);
+  if (t) return t;
+  // 2. Exact abbrev
+  t = teams.find(tm => norm(tm.abbrev||'') === ni);
+  if (t) return t;
+  // 3. Alias map
+  const aliasAbbrev = TEAM_ALIASES[ni];
+  if (aliasAbbrev) {
+    t = teams.find(tm => tm.abbrev === aliasAbbrev);
+    if (t) return t;
+  }
+  // 4. Last word of team name = input ("Hurricanes" → CAR)
+  for (const tm of teams) {
+    const lastWord = norm(tm.name).split(/\s+/).pop();
+    if (lastWord && lastWord === ni) return tm;
+  }
+  // 5. Substring overlap (input contained in team name OR vice versa, ≥4 chars)
+  if (ni.length >= 4) {
+    for (const tm of teams) {
+      const tn = norm(tm.name);
+      if (tn.includes(ni) || ni.includes(tn)) return tm;
+    }
+  }
+  return null;
+}
+
+// Fuzzy player lookup against playoff-team rosters (skaters + goalies).
+// Returns the player object or null. Tries exact name, last-name match,
+// then substring.
+function findPlayerFlexible(input) {
+  if (!input) return null;
+  const ni = norm(input);
+  if (!ni) return null;
+  const all = [...(DATA.nhlData?.skaters||[]), ...(DATA.nhlData?.goalies||[])];
+  if (!all.length) return null;
+  // 1. Exact full name
+  let p = all.find(p => norm(p.name) === ni);
+  if (p) return p;
+  // 2. Last name match (last word of input matches last word of player name)
+  const inputWords = ni.split(/\s+/);
+  const inputLast = inputWords[inputWords.length - 1];
+  if (inputLast && inputLast.length >= 3) {
+    const matches = all.filter(p => {
+      const w = norm(p.name).split(/\s+/);
+      return w[w.length - 1] === inputLast;
+    });
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) {
+      // Disambiguate by first name match if possible
+      const inputFirst = inputWords[0];
+      const better = matches.find(p => norm(p.name).split(/\s+/)[0] === inputFirst);
+      if (better) return better;
+    }
+  }
+  // 3. Substring (input contained in player name OR vice versa)
+  if (ni.length >= 4) {
+    p = all.find(p => norm(p.name).includes(ni) || ni.includes(norm(p.name)));
+    if (p) return p;
+  }
+  return null;
+}
+
+// Compare two team-name inputs by canonical abbrev when possible.
+// Falls back to normalized-name equality when one or both can't be resolved.
+function sameTeam(a, b) {
+  if (!a || !b) return false;
+  const ta = findTeamFlexible(a), tb = findTeamFlexible(b);
+  if (ta && tb) return ta.abbrev === tb.abbrev;
+  return norm(a) === norm(b);
+}
+
+// Same idea for players (Conn Smythe).
+function samePlayer(a, b) {
+  if (!a || !b) return false;
+  const pa = findPlayerFlexible(a), pb = findPlayerFlexible(b);
+  if (pa && pb) return norm(pa.name) === norm(pb.name);
+  return norm(a) === norm(b);
+}
 
 function getEliminatedTeams() {
   // An eliminated team is the loser of a series (i.e. not the winner)
@@ -2956,7 +3068,8 @@ function renderPoolerDetail() {
   function skaterRow(name, s) {
     const elim = isPlayerEliminated(name, eliminated);
     const rowStyle = elim ? `style="${elimStyle}"` : '';
-    const elimBadge = elim ? ' <span class="badge badge-red">Éliminé</span>' : '';
+    // Strikethrough + red color is enough; no text badge so the row doesn't overflow on mobile
+    const elimBadge = '';
     return `<tr ${rowStyle}>
       <td><div class="player-cell">${headshotImg(s?.headshot)}<span>${name}${elimBadge}</span></div></td>
       <td><div class="team-cell">${teamLogoImg(s?.team)}<span>${s?.team||'—'}</span></div></td>
@@ -2984,7 +3097,7 @@ function renderPoolerDetail() {
     const g = DATA.nhlData.goalies.find(gl => norm(gl.name) === norm(picks.goalie));
     const goalieElim = isPlayerEliminated(picks.goalie, eliminated);
     const gStyle = goalieElim ? `style="${elimStyle}"` : '';
-    const gBadge = goalieElim ? ' <span class="badge badge-red">Éliminé</span>' : '';
+    const gBadge = ''; // strikethrough+red only, no text — mobile-friendly
     html += `<div class="card"><h3>Gardien</h3><table><thead><tr><th>Nom</th><th>Équipe</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">BL</th><th style="text-align:right">Pts</th></tr></thead><tbody>
       <tr ${gStyle}>
         <td><div class="player-cell">${headshotImg(g?.headshot)}<span>${picks.goalie}${gBadge}</span></div></td>
@@ -2998,7 +3111,7 @@ function renderPoolerDetail() {
     const t = DATA.nhlData.teams.find(tm => norm(tm.name) === norm(picks.team));
     const teamElim = isTeamEliminated(picks.team, eliminated);
     const tStyle = teamElim ? `style="${elimStyle}"` : '';
-    const tBadge = teamElim ? ' <span class="badge badge-red">Éliminée</span>' : '';
+    const tBadge = ''; // strikethrough+red only, no text — mobile-friendly
     html += `<div class="card"><h3>Équipe</h3><table><thead><tr><th>Nom</th><th style="text-align:right">PJ</th><th style="text-align:right">V</th><th style="text-align:right">D</th><th style="text-align:right">Pts</th></tr></thead><tbody>
       <tr ${tStyle}>
         <td><div class="player-cell">${teamLogoImg(t?.abbrev, 'team-logo-lg')}<span>${picks.team}${tBadge}</span></div></td>
@@ -3011,15 +3124,25 @@ function renderPoolerDetail() {
   const predBreakdown = calcPredictionPointsByRound(poolerName);
   const grandTotalPts = predBreakdown.total + bonusPts;
 
-  // Helpers for the prediction view
-  const teamAbbrevByName = (n) => {
-    if (!n) return '';
-    const t = DATA.nhlData.teams.find(tm => norm(tm.name) === norm(n));
-    return t?.abbrev || '';
-  };
+  // Helpers for the prediction view. Uses fuzzy matching so hand-typed
+  // entries like "Carolina" or "Habs" still resolve to the canonical NHL
+  // team and get a logo + canonical name in the display.
+  const resolvedTeam = (n) => findTeamFlexible(n);
+  const resolvedPlayer = (n) => findPlayerFlexible(n);
+  const teamAbbrevByName = (n) => resolvedTeam(n)?.abbrev || '';
+  const teamDisplayName = (n) => resolvedTeam(n)?.name || (n || '—');
+  const playerDisplayName = (n) => resolvedPlayer(n)?.name || (n || '—');
   const tinyLogo = (abbrev) => abbrev
     ? `<img src="${teamLogoUrl(abbrev)}" onerror="this.style.display='none'" loading="lazy">`
     : '';
+  const playerHeadshot = (n) => {
+    const p = resolvedPlayer(n);
+    return p?.headshot ? `<img src="${p.headshot}" onerror="this.style.display='none'" loading="lazy" style="border-radius:50%;background:var(--surface2)">` : '';
+  };
+  const playerTeamLogo = (n) => {
+    const p = resolvedPlayer(n);
+    return p?.team ? tinyLogo(p.team) : '';
+  };
   const ptsBadge = (pts) => {
     if (pts == null) return '<span class="badge badge-grey">—</span>';
     if (pts === 5) return '<span class="badge badge-green">5 pts</span>';
@@ -3042,9 +3165,9 @@ function renderPoolerDetail() {
     // Finale predictions
     if (isDeadlinePassed('finale')) {
       const res = DATA.finaleResults;
-      const champPts = res.champion ? (norm(preds.champion) === norm(res.champion) ? 10 : 0) : null;
-      const finPts = res.finalist ? (norm(preds.finalist) === norm(res.finalist) ? 5 : 0) : null;
-      const csPts = res.connSmythe ? (norm(preds.connSmythe) === norm(res.connSmythe) ? 5 : 0) : null;
+      const champPts = res.champion ? (sameTeam(preds.champion, res.champion) ? 10 : 0) : null;
+      const finPts = res.finalist ? (sameTeam(preds.finalist, res.finalist) ? 5 : 0) : null;
+      const csPts = res.connSmythe ? (samePlayer(preds.connSmythe, res.connSmythe) ? 5 : 0) : null;
       html += `
         <div class="pred-round-header">
           <strong>Finale</strong>
@@ -3053,17 +3176,17 @@ function renderPoolerDetail() {
         <div class="pred-list">
           <div class="pred-row">
             <span class="pred-finale-label">Champion</span>
-            <span class="pred-pick">${tinyLogo(teamAbbrevByName(preds.champion))}<span class="pick-text">${preds.champion || '—'}</span></span>
+            <span class="pred-pick">${tinyLogo(teamAbbrevByName(preds.champion))}<span class="pick-text">${teamDisplayName(preds.champion)}</span></span>
             <span class="pred-pts">${ptsBadge(champPts)}</span>
           </div>
           <div class="pred-row">
             <span class="pred-finale-label">Finaliste</span>
-            <span class="pred-pick">${tinyLogo(teamAbbrevByName(preds.finalist))}<span class="pick-text">${preds.finalist || '—'}</span></span>
+            <span class="pred-pick">${tinyLogo(teamAbbrevByName(preds.finalist))}<span class="pick-text">${teamDisplayName(preds.finalist)}</span></span>
             <span class="pred-pts">${ptsBadge(finPts)}</span>
           </div>
           <div class="pred-row">
             <span class="pred-finale-label">Conn Smythe</span>
-            <span class="pred-pick"><span class="pick-text">${preds.connSmythe || '—'}</span></span>
+            <span class="pred-pick">${playerTeamLogo(preds.connSmythe)}<span class="pick-text">${playerDisplayName(preds.connSmythe)}</span></span>
             <span class="pred-pts">${ptsBadge(csPts)}</span>
           </div>
         </div>

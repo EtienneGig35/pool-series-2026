@@ -1,7 +1,7 @@
 // Service Worker for Pool Séries 2026
 // Handles background notifications when draft turn changes
 
-const CACHE_NAME = 'pool-series-v26';
+const CACHE_NAME = 'pool-series-v27';
 const FIREBASE_DB_URL = 'https://pool-series-2026-default-rtdb.firebaseio.com';
 
 // Install: cache essential files
