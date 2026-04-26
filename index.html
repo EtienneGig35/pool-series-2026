@@ -204,7 +204,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v27</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v28</span>
   </div>
 </nav>
 
@@ -1825,6 +1825,13 @@ const TEAM_ALIASES = {
 // Fuzzy team lookup. Returns a team object {name, abbrev, ...} from
 // DATA.nhlData.teams or null. Tries: exact name, exact abbrev, alias map,
 // last-word match (e.g. "Hurricanes"), substring overlap.
+// Split a string into normalized "significant" words. Splits on whitespace,
+// apostrophes, hyphens; lowercases; strips diacritics. Used for fuzzy matching
+// against French team names like "Avalanche du Colorado", "Sénateurs d'Ottawa".
+function splitToWords(s) {
+  return norm(s).split(/[\s'’\-]+/).filter(Boolean);
+}
+
 function findTeamFlexible(input) {
   if (!input) return null;
   const teams = DATA.nhlData?.teams || [];
@@ -1837,7 +1844,7 @@ function findTeamFlexible(input) {
   // 2. Exact abbrev
   t = teams.find(tm => norm(tm.abbrev||'') === ni);
   if (t) return t;
-  // 3. Alias map
+  // 3. Alias map (handles English nicknames like "Habs", "Avs", "Bolts")
   const aliasAbbrev = TEAM_ALIASES[ni];
   if (aliasAbbrev) {
     t = teams.find(tm => tm.abbrev === aliasAbbrev);
@@ -1853,6 +1860,18 @@ function findTeamFlexible(input) {
     for (const tm of teams) {
       const tn = norm(tm.name);
       if (tn.includes(ni) || ni.includes(tn)) return tm;
+    }
+  }
+  // 6. Word overlap — handles French syntax like "Avalanche du Colorado",
+  //    "Lightning de Tampa Bay", "Sénateurs d'Ottawa", "Mammoth de l'Utah".
+  //    Match if any input word (≥4 chars) equals any team-name word.
+  const inputWords = splitToWords(input).filter(w => w.length >= 4);
+  if (inputWords.length) {
+    for (const tm of teams) {
+      const teamWords = splitToWords(tm.name);
+      for (const iw of inputWords) {
+        if (teamWords.includes(iw)) return tm;
+      }
     }
   }
   return null;
