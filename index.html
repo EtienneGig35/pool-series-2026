@@ -204,7 +204,7 @@ input::placeholder { color: var(--text2); }
   <div class="nav-right">
     <span id="notif-status" onclick="toggleNotifications()" style="cursor:pointer;font-size:18px;padding:4px 8px;border-radius:8px" title="Notifications"></span>
     <button class="btn btn-sm" onclick="refreshAll()">⟳ Rafraîchir</button>
-    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v28</span>
+    <span id="version-tag" onclick="handleVersionClick()" style="font-size:10px;color:var(--text2);opacity:.6;cursor:default" title="Version du code">v29</span>
   </div>
 </nav>
 
@@ -1931,7 +1931,9 @@ function samePlayer(a, b) {
 }
 
 function getEliminatedTeams() {
-  // An eliminated team is the loser of a series (i.e. not the winner)
+  // Returns a Set of canonical team abbreviations (e.g. "LAK", "OTT") for eliminated teams.
+  // We canonicalize via findTeamFlexible so the comparison in isPlayerEliminated /
+  // isTeamEliminated is a simple set lookup on the abbrev.
   const eliminated = new Set();
   for (const rn of [1,2,3,4]) {
     const series = DATA.rounds[rn] || [];
@@ -1940,8 +1942,12 @@ function getEliminatedTeams() {
       const res = results[i];
       if (!res?.winner) continue;
       const teams = series[i].split(/\s+vs\s+/i).map(t => t.trim());
+      const winnerTm = findTeamFlexible(res.winner);
+      const winnerKey = winnerTm?.abbrev || norm(res.winner);
       for (const t of teams) {
-        if (norm(t) !== norm(res.winner)) eliminated.add(norm(t));
+        const tm = findTeamFlexible(t);
+        const tKey = tm?.abbrev || norm(t);
+        if (tKey !== winnerKey) eliminated.add(tKey);
       }
     }
   }
@@ -1949,35 +1955,23 @@ function getEliminatedTeams() {
 }
 
 function isPlayerEliminated(playerName, eliminatedTeams) {
-  // Check via NHL data: find the player's team abbreviation or name, then check if eliminated
+  // eliminatedTeams contains canonical abbrevs (e.g. "LAK"). skater.team is also the abbrev.
   const skater = DATA.nhlData.skaters.find(s => norm(s.name) === norm(playerName));
-  if (skater?.team) {
-    // Check if any eliminated team name/abbrev matches
-    for (const elim of eliminatedTeams) {
-      if (norm(skater.team).includes(elim) || elim.includes(norm(skater.team))) return true;
-    }
-  }
+  if (skater?.team && eliminatedTeams.has(skater.team)) return true;
   const goalie = DATA.nhlData.goalies.find(g => norm(g.name) === norm(playerName));
-  if (goalie?.team) {
-    for (const elim of eliminatedTeams) {
-      if (norm(goalie.team).includes(elim) || elim.includes(norm(goalie.team))) return true;
-    }
-  }
-  // Also check the team picks in DATA.nhlData.teams
-  const team = DATA.nhlData.teams.find(t => norm(t.name) === norm(playerName));
-  if (team) {
-    for (const elim of eliminatedTeams) {
-      if (norm(team.name).includes(elim) || elim.includes(norm(team.name)) ||
-          norm(team.abbrev||'').includes(elim) || elim.includes(norm(team.abbrev||''))) return true;
-    }
-  }
+  if (goalie?.team && eliminatedTeams.has(goalie.team)) return true;
+  // Defensive: if the input itself happens to be a team name (legacy team picks),
+  // resolve it to its abbrev and check.
+  const tm = findTeamFlexible(playerName);
+  if (tm && eliminatedTeams.has(tm.abbrev)) return true;
   return false;
 }
 
 function isTeamEliminated(teamName, eliminatedTeams) {
-  for (const elim of eliminatedTeams) {
-    if (norm(teamName).includes(elim) || elim.includes(norm(teamName))) return true;
-  }
+  const tm = findTeamFlexible(teamName);
+  if (tm && eliminatedTeams.has(tm.abbrev)) return true;
+  // Fallback: handle pre-resolved abbrevs / raw strings already in the set
+  if (eliminatedTeams.has(norm(teamName))) return true;
   return false;
 }
 
