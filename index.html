@@ -246,7 +246,7 @@ input::placeholder { color: var(--text2); }
       <strong>Gardien:</strong> 2 pts par victoire + 2 pts supplémentaires par blanchissage.<br>
       <strong>Équipe:</strong> 2 pts par victoire de l'équipe en séries.<br>
       <strong>Prédictions rondes:</strong> 5 pts bonne équipe + bon nombre de matchs, 3 pts bonne équipe seulement, 1 pt mauvaise équipe mais bonne prédiction d'une série en 7.<br>
-      <strong>Bonus finale:</strong> 10 pts champion Coupe Stanley, 5 pts finaliste, 5 pts Conn Smythe.<br>
+      <strong>Bonus finale:</strong> 10 pts champion Coupe Stanley, 5 pts équipe atteignant la finale, 5 pts Conn Smythe.<br>
       <strong>Composition:</strong> 6 attaquants, 2 défenseurs, 1 gardien, 1 équipe.<br>
       <strong>Coût:</strong> 25$ par pooler.<br>
       <strong>Distribution:</strong> <span id="standings-distribution"></span>
@@ -492,7 +492,7 @@ input::placeholder { color: var(--text2); }
       — <strong style="color:var(--text)">1 point</strong> si tu prédis la mauvaise équipe, mais que tu avais prédit une série en 7 matchs et qu'elle va effectivement en 7.<br><br>
       <strong style="color:var(--accent)">Bonus Finale</strong><br>
       — <strong style="color:var(--text)">10 points</strong> si tu prédis le champion de la Coupe Stanley.<br>
-      — <strong style="color:var(--text)">5 points</strong> si tu prédis le finaliste (perdant de la finale).<br>
+      — <strong style="color:var(--text)">5 points</strong> si tu prédis une équipe qui atteint la finale de la Coupe Stanley (champion ou perdant).<br>
       — <strong style="color:var(--text)">5 points</strong> si tu prédis le gagnant du trophée Conn Smythe (MVP des séries).<br><br>
       <strong style="color:var(--accent)">Coût de participation</strong><br>
       <strong style="color:var(--text)">25$</strong> par pooler.<br><br>
@@ -1627,9 +1627,14 @@ function parseBracketToRoundsAndResults(bracket) {
 }
 
 function autoDetectFinaleResults() {
-  // Champion = winner of round 4, Finalist = loser of round 4
   const finaleSeries = DATA.rounds[4] || [];
   const finaleResults = DATA.results[4] || [];
+  // Detect the two finalists as soon as round 4 matchup exists
+  if (finaleSeries.length) {
+    const teams = finaleSeries[0].split(/\s+vs\s+/i).map(t => t.trim());
+    DATA.finaleResults.finalists = teams; // both teams in the final
+  }
+  // Champion = winner of round 4, Finalist (loser) = other team
   if (finaleSeries.length && finaleResults.length && finaleResults[0]?.winner) {
     const teams = finaleSeries[0].split(/\s+vs\s+/i).map(t => t.trim());
     const winner = finaleResults[0].winner;
@@ -1790,7 +1795,11 @@ function calcFinaleBonus(poolerName) {
   const res = DATA.finaleResults;
   let total = 0;
   if (res.champion && sameTeam(preds.champion, res.champion)) total += 10;
-  if (res.finalist && sameTeam(preds.finalist, res.finalist)) total += 5;
+  // 5 pts for predicting any team that reaches the final (finalist prediction)
+  const finalists = res.finalists || [];
+  if (finalists.length === 2 && preds.finalist) {
+    if (finalists.some(t => sameTeam(preds.finalist, t))) total += 5;
+  }
   if (res.connSmythe && samePlayer(preds.connSmythe, res.connSmythe)) total += 5;
   return total;
 }
@@ -3179,7 +3188,8 @@ function renderPoolerDetail() {
     if (isDeadlinePassed('finale')) {
       const res = DATA.finaleResults;
       const champPts = res.champion ? (sameTeam(preds.champion, res.champion) ? 10 : 0) : null;
-      const finPts = res.finalist ? (sameTeam(preds.finalist, res.finalist) ? 5 : 0) : null;
+      const finalists = res.finalists || [];
+      const finPts = finalists.length === 2 ? (finalists.some(t => sameTeam(preds.finalist, t)) ? 5 : 0) : null;
       const csPts = res.connSmythe ? (samePlayer(preds.connSmythe, res.connSmythe) ? 5 : 0) : null;
       html += `
         <div class="pred-round-header">
